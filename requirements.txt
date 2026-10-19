@@ -1,0 +1,3 @@
+# AEDT automation (ansys.aedt.core); needs a local AEDT install (2025.1) to run.
+pyaedt==1.0.1
+numpy==2.5.4
