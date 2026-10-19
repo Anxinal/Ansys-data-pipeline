@@ -2,19 +2,13 @@ from datetime import datetime
 from pathlib import Path
 
 from ansys.aedt.core import Desktop
-from ansys.aedt.core.modules.material import MatProperties
+
+from Chips.Components import Component
+from Chips.Components.utils import find_component, print_info, safe
 
 # Fields-calculator expressions created by the simulation workflow. AEDT can
 # check a named expression by name but has no call that lists them all.
 NAMED_EXPRESSIONS = ("smoothscalBx", "smoothscalBy", "smoothscalBz")
-
-
-def _safe(getter):
-    """Return getter(), or a short note if AEDT can't provide the value."""
-    try:
-        return getter()
-    except Exception as e:
-        return f"<unavailable: {e}>"
 
 
 def _folder_size_mb(path):
@@ -24,44 +18,69 @@ def _folder_size_mb(path):
     return sum(f.stat().st_size for f in path.rglob("*") if f.is_file()) / 1e6
 
 
-def _print_info(info, indent=2):
-    """Print a nested info dictionary as an indented key/value listing."""
-    pad = " " * indent
-    if not isinstance(info, dict):
-        print(f"{pad}{info}")
-        return
-    for key, value in info.items():
-        if isinstance(value, dict):
-            print(f"{pad}{key}:")
-            _print_info(value, indent + 2)
-        elif isinstance(value, list) and len(str(value)) > 100:
-            print(f"{pad}{key}: ({len(value)})")
-            for item in value:
-                print(f"{pad}  {item}")
-        else:
-            print(f"{pad}{key:<28} {value}")
-
-
-class session:
+class Session:
 
     def __init__(self, path: str, design=None):
         self.path = path  
         # No GUI: everything below goes through the AEDT API.
         desktop = Desktop(non_graphical=True, new_desktop=True)
-        self.app = desktop.load_project(path, design_name=design)
+        try:
+            # The design's app object, e.g. ansys.aedt.core.Maxwell3d (not a Desktop).
+            self.app = desktop.load_project(path, design_name=design)
+        except Exception:
+            desktop.release_desktop(close_projects=True, close_on_exit=True)
+            raise
+        if not self.app:
+            desktop.release_desktop(close_projects=True, close_on_exit=True)
+            raise RuntimeError(f"AEDT could not open {path}" + (f' (design "{design}")' if design else ""))
+        self._components = None
+
+    @property
+    def components(self):
+        """Every object in the design as a Component subclass (read once, then cached)."""
+        if self._components is None:
+            self._components = Component.all(self.app)
+        return self._components
+
+    def get_component(self, name):
+        """The component called ``name`` (case-insensitive, like Chip and Terminal)."""
+        try:
+            return find_component(self.components, name, "this design")
+        except LookupError as e:
+            raise KeyError(str(e)) from None
+
+    @property
+    def materials(self):
+        """The Materials used by the components, one per material."""
+        materials = {}
+        for component in self.components:
+            material = component.material
+            if material is not None:
+                materials.setdefault(material.name, material)
+        return [materials[name] for name in sorted(materials)]
+
+    def get_material(self, name):
+        material = next((m for m in self.materials if m.name.lower() == name.lower()), None)
+        if material is None:
+            raise KeyError(f'No material named "{name}" in use. Available: {[m.name for m in self.materials]}')
+        return material
 
 
     def generate_data(self):
         pass 
 
+    def release(self):
+        """Release the session"""
+        self.app.release_desktop(close_projects=True, close_desktop=True)
 
 
     def get_session_info(self, attr: str | None = None):
         """Print and return everything the open project can tell about itself.
 
         Returns a dict of sections: session, project, design, variables,
-        geometry, materials, boundaries, mesh, setups, optimetrics and post.
-        Pass ``attr`` (one of those names) to print and return one section.
+        geometry, components, materials, boundaries, mesh, setups, optimetrics
+        and post. Pass ``attr`` (one of those names) to print and return one
+        section.
         """
         sections = {
             "session": self._session_section,
@@ -69,6 +88,7 @@ class session:
             "design": self._design_section,
             "variables": self._variables_section,
             "geometry": self._geometry_section,
+            "components": self._components_section,
             "materials": self._materials_section,
             "boundaries": self._boundaries_section,
             "mesh": self._mesh_section,
@@ -82,32 +102,43 @@ class session:
         info = {}
         for name in [attr] if attr else sections:
             # One section failing (an API this design type lacks) shouldn't hide the rest.
-            info[name] = _safe(sections[name])
+            info[name] = safe(sections[name])
             print(f"\n=== {name} {'=' * max(0, 70 - len(name))}")
-            _print_info(info[name])
+            if name == "components" and isinstance(info[name], dict):
+                # Each component prints itself, with the fields of its subtype.
+                for component in self.components:
+                    component.print(info[name][component.name])
+            elif name == "materials" and isinstance(info[name], dict):
+                for material in self.materials:
+                    material.print(info[name][material.name])
+            else:
+                print_info(info[name])
         return info[attr] if attr else info
 
     def edit(self, section: str, name: str, **changes):
         """Change one item listed by get_session_info through the API.
 
-        ``section`` is "variables", "objects", "setups", "boundaries" or "mesh",
-        and ``changes`` use the property names get_session_info shows, e.g.::
+        ``section`` is "variables", "components", "materials", "setups",
+        "boundaries" or "mesh", and ``changes`` use the property names
+        get_session_info shows, e.g.::
 
             s.edit("variables", "defect_depth", expression="0.2mm")
-            s.edit("objects", "PCB", material_name="FR4_epoxy", solve_inside=False)
+            s.edit("components", "PCB", material_name="FR4_epoxy", solve_inside=False)
+            s.edit("materials", "copper", conductivity=5.8e7)
             s.edit("setups", "Setup1", MaximumPasses=12, PercentError=0.5)
 
         Returns the edited values as read back from the session. Changes stay
         in the open session until save() is called.
         """
         app = self.app
-        if section in ("variables", "objects"):
-            if section == "variables":
-                item = app.variable_manager.variables.get(name)
-            else:
-                item = app.modeler.get_object_from_name(name)
+        if section in ("components", "objects"):
+            return self.get_component(name).edit(**changes)
+        if section == "materials":
+            return self.get_material(name).edit(**changes)
+        if section == "variables":
+            item = app.variable_manager.variables.get(name)
             if item is None:
-                raise KeyError(f'No {section} item named "{name}"')
+                raise KeyError(f'No variables item named "{name}"')
             for key, value in changes.items():
                 prop = getattr(type(item), key, None)
                 if not (isinstance(prop, property) and prop.fset):
@@ -121,7 +152,7 @@ class session:
             "mesh": lambda: app.mesh.meshoperations,
         }
         if section not in getters:
-            raise KeyError(f"Unknown section {section!r}, choose from {['variables', 'objects', *getters]}")
+            raise KeyError(f"Unknown section {section!r}, choose from {['variables', 'components', 'materials', *getters]}")
         items = getters[section]()
         item = next((i for i in items if i.name == name), None)
         if item is None:
@@ -158,7 +189,7 @@ class session:
         designs = {}
         for name in app.design_list:
             design = app.oproject.GetDesign(name)
-            designs[name] = f"{_safe(design.GetDesignType)}, {_safe(design.GetSolutionType)}"
+            designs[name] = f"{safe(design.GetDesignType)}, {safe(design.GetSolutionType)}"
         return {
             "name": app.project_name,
             "file": str(project_file),
@@ -179,9 +210,9 @@ class session:
             "design type": app.design_type,
             "solution type": app.solution_type,
             "model units": app.modeler.model_units,
-            "symmetry multiplier": _safe(lambda: app.symmetry_multiplier),
+            "symmetry multiplier": safe(lambda: app.symmetry_multiplier),
             "excitations": app.excitation_names,
-            "output variables": _safe(lambda: list(app.output_variables)),
+            "output variables": safe(lambda: list(app.output_variables)),
             "datasets": list(app.design_datasets),
         }
 
@@ -191,8 +222,8 @@ class session:
                 name: {
                     "expression": var.expression,
                     "value": var.evaluated_value,
-                    "sweep": _safe(lambda: var.sweep),
-                    "description": _safe(lambda: var.description),
+                    "sweep": safe(lambda: var.sweep),
+                    "description": safe(lambda: var.description),
                 }
                 for name, var in variables.items()
             }
@@ -202,44 +233,22 @@ class session:
 
     def _geometry_section(self):
         modeler = self.app.modeler
-        objects = {}
-        for name in modeler.object_names:
-            obj = modeler.get_object_from_name(name)
-            objects[name] = {
-                "type": obj.object_type,
-                "material": obj.material_name,
-                "solve inside": obj.solve_inside,
-                "model": obj.is_model,
-                "bounding box": _safe(lambda: obj.bounding_box),
-                "volume": _safe(lambda: obj.volume),
-            }
         return {
             "units": modeler.model_units,
             "solids / sheets / lines": f"{len(modeler.solid_objects)} / {len(modeler.sheet_objects)} / {len(modeler.line_objects)}",
             "points": len(modeler.point_names),
             "non-model objects": modeler.non_model_objects,
             "3D components": modeler.user_defined_component_names,
-            "groups": _safe(lambda: list(modeler.oeditor.GetChildNames("Groups"))),
+            "groups": safe(lambda: list(modeler.oeditor.GetChildNames("Groups"))),
             "coordinate systems": [cs.name for cs in modeler.coordinate_systems],
-            "model bounding box": _safe(modeler.get_model_bounding_box),
-            "objects": objects,
+            "model bounding box": safe(modeler.get_model_bounding_box),
         }
 
+    def _components_section(self):
+        return {component.name: component.info() for component in self.components}
+
     def _materials_section(self):
-        app = self.app
-        used = {app.modeler.get_object_from_name(n).material_name for n in app.modeler.object_names} - {"", None}
-        materials = {}
-        for material_name in sorted(used):
-            material = app.materials[material_name]
-            if material is None:
-                materials[material_name] = "<not found in the project's materials>"
-                continue
-            materials[material_name] = {
-                prop: f"{getattr(material, prop).value} {getattr(material, prop).unit or ''}".rstrip()
-                for prop in MatProperties.aedtname
-                if getattr(material, prop, None) is not None
-            }
-        return materials
+        return {material.name: material.info() for material in self.materials}
 
     def _boundaries_section(self):
         return {b.name: {"type": b.type, **b.props} for b in self.app.boundaries}
@@ -260,7 +269,7 @@ class session:
             solved_variations[solution] = app.list_of_variations(setup_name, sweep_name) or []
         return {
             "setups": {s.name: {"solved": s.is_solved, **s.props} for s in app.setups},
-            "nominal variation": _safe(lambda: app.get_nominal_variation(with_values=True)),
+            "nominal variation": safe(lambda: app.get_nominal_variation(with_values=True)),
             "solved variations": solved_variations,
         }
 
@@ -275,22 +284,13 @@ class session:
         app = self.app
         return {
             "reports": {r.plot_name: {"type": r.report_type, "solution": r.setup} for r in app.post.plots},
-            "field plots": _safe(lambda: list(app.post.field_plot_names)),
+            "field plots": safe(lambda: list(app.post.field_plot_names)),
             "named expressions": {
                 name: bool(app.ofieldsreporter.DoesNamedExpressionExists(name)) for name in NAMED_EXPRESSIONS
             },
         }
 
 
-if __name__ == "__main__":
-    import sys
-
-    s = session(sys.argv[1])
-    try:
-        s.get_session_info()
-    finally:
-        # Close without saving: this only reads the project.
-        s.app.release_desktop(close_projects=True, close_desktop=True)
 
 
 

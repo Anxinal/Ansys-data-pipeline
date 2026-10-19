@@ -6,7 +6,7 @@ Usage:
 
 import argparse
 
-from Session import session
+from Session import Session
 
 
 def main():
@@ -15,12 +15,12 @@ def main():
     parser.add_argument("--design", help="design to open (default: the project's active design)")
     args = parser.parse_args()
 
-    s = session(args.path, design=args.design)
+    s = Session(args.path, design=args.design)
     try:
         info = s.get_session_info()
     finally:
         # Close without saving: call s.save() first if you made edits.
-        s.app.release_desktop(close_projects=True, close_desktop=True)
+        s.release()
     return info
 
 
