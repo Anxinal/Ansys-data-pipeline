@@ -3,12 +3,13 @@ from pathlib import Path
 
 from ansys.aedt.core import Desktop
 
+from Analysis import BZ_EXPRESSION
 from Chips.Components import Component
 from Chips.Components.utils import find_component, print_info, safe
 
-# Fields-calculator expressions created by the simulation workflow. AEDT can
-# check a named expression by name but has no call that lists them all.
-NAMED_EXPRESSIONS = ("smoothscalBx", "smoothscalBy", "smoothscalBz")
+# Fields-calculator expressions the analyses use. AEDT can check a named
+# expression by name but has no call that lists them all.
+NAMED_EXPRESSIONS = (BZ_EXPRESSION,)
 
 
 def _folder_size_mb(path):
