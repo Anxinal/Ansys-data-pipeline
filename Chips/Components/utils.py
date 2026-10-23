@@ -1,12 +1,9 @@
-"""Helpers shared by the session and the component classes."""
+"""Helpers for the chip-layer classes: lookups, geometry and printing (no AEDT)."""
 
 
-def safe(getter):
-    """Return getter(), or a short note if AEDT can't provide the value."""
-    try:
-        return getter()
-    except Exception as e:
-        return f"<unavailable: {e}>"
+def boxes_touch(a, b, tolerance=1e-9):
+    """True when two bounding boxes [xmin, ymin, zmin, xmax, ymax, zmax] overlap or touch."""
+    return all(a[i] <= b[i + 3] + tolerance and b[i] <= a[i + 3] + tolerance for i in range(3))
 
 
 def find_component(components, name, label):

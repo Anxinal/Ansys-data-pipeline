@@ -1,56 +1,62 @@
-from .Components.utils import find_component, format_info
+from .Components import Component
+from .Components.utils import format_info
+from .Positions import NumericallyPlaced
 
 
-class Terminal:
-    """GND or VCC: a component or an excitation, located by its center."""
+class Terminal(NumericallyPlaced, Component):
+    """GND or VCC: the object that carries the terminal, with its role (``label``).
+
+    Found by name among ``components``: an object's name, or the name of an
+    excitation, in which case the terminal is the object that excitation is
+    assigned to (``boundary`` keeps the excitation).
+    """
 
     def __init__(self, components, label, name):
-        """Find the terminal called ``name`` among ``components``.
-
-        ``name`` is matched (case-insensitive) against the component names first,
-        then against the excitations assigned to those components.
-        """
         if not components:
             raise ValueError(f"{label} terminal needs at least one component to search")
-        self.label = label
-        self.component = None
-        self.boundary = None
-
         component = next((c for c in components if c.name.lower() == name.lower()), None)
-        if component is not None:
-            self.component = component
-            self.name = component.name
-            self.position = component.center
-            return
-
-        # Not an object: look for an excitation of that name assigned to the components.
-        boundaries = components[0].app.boundaries
-        boundary = next((b for b in boundaries if b.name.lower() == name.lower()), None)
-        if boundary is None:
-            available = [c.name for c in components] + [b.name for b in boundaries]
-            raise LookupError(f'No component or excitation named "{name}" for {label}. Available: {available}')
+        boundary = None
+        if component is None:
+            component, boundary = self._find_by_excitation(components, label, name)
+        super().__init__(component.name, component.type, component.bounding_box, component.face_ids,
+                         component.material_name, component.is_model, component.boundaries)
+        self.label = label
         self.boundary = boundary
-        self.name = boundary.name
-        # Excitations sit on faces or whole objects; average their centers.
-        face_ids = set(boundary.props.get("Faces", []))
-        centers = [face.center for c in components for face in c.obj.faces if face.id in face_ids]
-        centers += [find_component(components, obj, label).center for obj in boundary.props.get("Objects", [])]
-        if not centers:
-            raise LookupError(f'Excitation "{name}" for {label} is not assigned to any of the given components')
-        self.position = [sum(axis) / len(centers) for axis in zip(*centers)]
+
+    @staticmethod
+    def _find_by_excitation(components, label, name):
+        for component in components:
+            for boundary in component.boundaries:
+                if boundary.name.lower() == name.lower():
+                    return component, boundary
+        excitations = sorted({b.name for c in components for b in c.boundaries})
+        raise LookupError(
+            f'No component or excitation named "{name}" for {label}. '
+            f"Components: {[c.name for c in components]}; excitations: {excitations}"
+        )
+
+    @property
+    def point(self):
+        """The object's center, or for an excitation on faces, the average center of those faces."""
+        if self.boundary is not None and self.boundary.center is not None:
+            return list(self.boundary.center)
+        return self.center
 
     def info(self):
-        return {
-            "name": self.name,
-            "kind": f"excitation ({self.boundary.type})" if self.boundary else f"{self.component.obj.object_type} object",
-            "position": self.position,
-        }
+        """Chip-level summary: name, kind and position."""
+        kind = f"{self.type} object"
+        if self.boundary is not None:
+            kind += f' with excitation "{self.boundary.name}" ({self.boundary.type})'
+        return {"name": self.name, "kind": kind, "position": self.position}
+
+    def describe(self, full=False):
+        """The terminal's name, kind and position; with ``full``, also the object's details."""
+        details = self.info()
+        if full:
+            details = {**details, "component": Component.info(self)}
+            if self.boundary is not None:
+                details["excitation"] = dict(self.boundary.props)
+        return f'{self.label} "{self.name}"\n{format_info(details)}'
 
     def __str__(self):
-        """The terminal, followed by the object it is or the excitation's settings."""
-        details = {**self.info()}
-        if self.component is not None:
-            details["component"] = self.component.info()
-        else:
-            details["excitation"] = dict(self.boundary.props)
-        return f'{self.label} "{self.name}"\n{format_info(details)}'
+        return self.describe()

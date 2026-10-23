@@ -1,8 +1,7 @@
-"""Bz field analysis of an opened session.
+"""The export step: sample Bz on an image plane above the board and write it to files.
 
-Solves the design's setup in the session (or reuses its solution), samples Bz,
-the z-component of the magnetic flux density, on a flat image plane above the
-chip board, and exports it to the output folder:
+Bz, the z-component of the magnetic flux density, is sampled on a flat grid
+above the chip board and exported to the output folder:
 
     <project>_<design>_<setup>_Bz.fld   raw AEDT grid export: x, y, z, Bz rows
     <project>_<design>_<setup>_Bz.npz   the Bz image: x [nx], y [ny], bz [ny, nx]
@@ -15,15 +14,10 @@ from pathlib import Path
 
 import numpy as np
 
-# Defaults, overridable from main.py's options.
-DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parent / "Result" / "Bz"
-DEFAULT_SETUP = "Setup1"
-DEFAULT_SCAN_HEIGHT = 0.060  # image plane height above the board's top face, model units
-DEFAULT_GRID_STEP = 0.030  # image pixel size, model units
+from configs import BZ_EXPRESSION, DEFAULT_GRID_STEP, DEFAULT_OUTPUT_DIR, DEFAULT_SCAN_HEIGHT, DEFAULT_SETUP
 
-# Fields-calculator named expression for the smoothed z-component of B;
-# BzAnalysis creates it in the project when it is missing.
-BZ_EXPRESSION = "smoothscalBz"
+from .Action import AnsysAction
+from .Analysis import solution_name
 
 
 def file_stem(name):
@@ -58,31 +52,48 @@ def load_bz_image(fld_path):
     return x, y, bz
 
 
-class BzAnalysis:
-    """Solve a setup in an opened Session and export its Bz image."""
+class BzExport(AnsysAction):
+    """Export the Bz image above ``board`` (a Component); the summary ends up in ``self.result``."""
 
-    def __init__(self, session, setup=DEFAULT_SETUP, output_dir=DEFAULT_OUTPUT_DIR):
-        self.app = session.app
-        if setup not in self.app.setup_names:
-            raise ValueError(f'No setup "{setup}" in design "{self.app.design_name}". Available: {self.app.setup_names}')
+    def __init__(self, app, board, setup=DEFAULT_SETUP, output_dir=DEFAULT_OUTPUT_DIR,
+                 scan_height=DEFAULT_SCAN_HEIGHT, step=DEFAULT_GRID_STEP, label="export"):
+        super().__init__(app, label)
+        self.board = board
         self.setup = setup
         self.output_dir = Path(output_dir).expanduser().resolve()
-        self.units = self.app.modeler.model_units
+        self.scan_height = scan_height
+        self.step = step
+        self.units = app.modeler.model_units
+        self.result = None
 
     @property
     def solution(self):
-        """The setup's solution, e.g. "Setup1 : LastAdaptive"."""
-        for solution in self.app.existing_analysis_sweeps:
-            if solution.split(":")[0].strip() == self.setup:
-                return solution
-        return f"{self.setup} : LastAdaptive"
+        return solution_name(self.app, self.setup)
 
-    def solve(self, cores=None):
-        """Solve the setup in the open session and save the project so the solution is kept."""
-        print(f'Solving "{self.setup}" in design "{self.app.design_name}"...')
-        if not self.app.analyze_setup(self.setup, cores=cores):
-            raise RuntimeError(f'AEDT failed to solve "{self.setup}". See the AEDT message manager for details.')
-        self.app.save_project()
+    def act(self):
+        self.ensure_bz_expression()
+        start, stop, grid_step = self.image_plane()
+        fld_path = self.export_bz(start, stop, grid_step)
+        if fld_path is None:
+            return self.FAILURE
+
+        x, y, bz = load_bz_image(fld_path)
+        npz_path = fld_path.with_suffix(".npz")
+        np.savez_compressed(npz_path, x=x, y=y, bz=bz, z=start[2], units=self.units, solution=self.solution)
+
+        peak_y, peak_x = np.unravel_index(np.nanargmax(np.abs(bz)), bz.shape)
+        self.result = {
+            "solution": self.solution,
+            "image plane": f"z = {start[2]} {self.units}, {len(x)} x {len(y)} pixels of {self.step} {self.units}",
+            "Bz min (T)": float(np.nanmin(bz)),
+            "Bz max (T)": float(np.nanmax(bz)),
+            "peak |Bz| (T)": float(abs(bz[peak_y, peak_x])),
+            "peak at (x, y)": (float(x[peak_x]), float(y[peak_y])),
+            "missing pixels": int(np.isnan(bz).sum()),
+            "fld file": str(fld_path),
+            "npz file": str(npz_path),
+        }
+        return self.SUCCESS
 
     def ensure_bz_expression(self):
         """Create the smoothed-Bz named expression if the project doesn't have it yet."""
@@ -96,14 +107,14 @@ class BzAnalysis:
         reporter.AddNamedExpression(BZ_EXPRESSION, "Fields")
         reporter.CalcStack("clear")
 
-    def image_plane(self, board, scan_height=DEFAULT_SCAN_HEIGHT, step=DEFAULT_GRID_STEP):
+    def image_plane(self):
         """(start, stop, step) of a grid over the board's XY extent, scan_height above its top."""
-        xmin, ymin, _, xmax, ymax, zmax = board.obj.bounding_box
-        z = zmax + scan_height
-        return (xmin, ymin, z), (xmax, ymax, z), (step, step, 0)
+        xmin, ymin, _, xmax, ymax, zmax = self.board.bounding_box
+        z = zmax + self.scan_height
+        return (xmin, ymin, z), (xmax, ymax, z), (self.step, self.step, 0)
 
     def export_bz(self, start, stop, step):
-        """Export Bz on the grid to a .fld file in the output folder and return its path."""
+        """Export Bz on the grid to a .fld file; its path, or None (with self.error) on failure."""
         app = self.app
         self.output_dir.mkdir(parents=True, exist_ok=True)
         fld_path = self.output_dir / f"{file_stem(app.project_name)}_{file_stem(app.design_name)}_{file_stem(self.setup)}_Bz.fld"
@@ -135,28 +146,6 @@ class BzAnalysis:
         finally:
             reporter.CalcStack("clear")
         if not fld_path.is_file() or fld_path.stat().st_size < 100:
-            raise RuntimeError(f"AEDT did not write the Bz export {fld_path}")
+            self.error = f"AEDT did not write the Bz export {fld_path}"
+            return None
         return fld_path
-
-    def analyse(self, board, scan_height=DEFAULT_SCAN_HEIGHT, step=DEFAULT_GRID_STEP):
-        """Export the Bz image above ``board`` (a Component) and return a summary of it."""
-        self.ensure_bz_expression()
-        start, stop, grid_step = self.image_plane(board, scan_height, step)
-        fld_path = self.export_bz(start, stop, grid_step)
-
-        x, y, bz = load_bz_image(fld_path)
-        npz_path = fld_path.with_suffix(".npz")
-        np.savez_compressed(npz_path, x=x, y=y, bz=bz, z=start[2], units=self.units, solution=self.solution)
-
-        peak_y, peak_x = np.unravel_index(np.nanargmax(np.abs(bz)), bz.shape)
-        return {
-            "solution": self.solution,
-            "image plane": f"z = {start[2]} {self.units}, {len(x)} x {len(y)} pixels of {step} {self.units}",
-            "Bz min (T)": float(np.nanmin(bz)),
-            "Bz max (T)": float(np.nanmax(bz)),
-            "peak |Bz| (T)": float(abs(bz[peak_y, peak_x])),
-            "peak at (x, y)": (float(x[peak_x]), float(y[peak_y])),
-            "missing pixels": int(np.isnan(bz).sum()),
-            "fld file": str(fld_path),
-            "npz file": str(npz_path),
-        }
