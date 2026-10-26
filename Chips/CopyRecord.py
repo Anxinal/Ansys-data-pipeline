@@ -15,6 +15,8 @@ class CopyRecord:
     source_design: str
     roles: dict = field(default_factory=dict)
     copies: dict = field(default_factory=dict)
+    pin_counts: dict = field(default_factory=dict)
+    analysis_design: str | None = None
 
     @property
     def spheres(self):

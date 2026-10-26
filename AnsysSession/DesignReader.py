@@ -40,17 +40,20 @@ class DesignReader:
                 types[name] = object_type
         non_model = set(oeditor.GetObjectsInGroup("Non Model"))
         materials = {}
-        for key in app.materials.material_keys:
+        for key in app.odefinition_manager.GetProjectMaterialNames():
             for name in oeditor.GetObjectsByMaterial(key):
                 materials[name] = key
-        boundaries = self._boundaries()
+        names = self.object_names()
+        object_faces = {name: tuple(int(i) for i in oeditor.GetFaceIDs(name))
+                        if name in types else () for name in names}
+        boundaries = self._boundaries(object_faces)
 
         components = []
-        for name in self.object_names():
+        for name in names:
             object_type = types.get(name, "Unclassified")
             classified = object_type != "Unclassified"
             box = [float(v) for v in oeditor.GetObjectBoundingBox(name)] if classified else [0.0] * 6
-            faces = [int(i) for i in oeditor.GetFaceIDs(name)] if classified else []
+            faces = list(object_faces[name])
             face_set = set(faces)
             assigned = [b for b in boundaries
                         if name.lower() in (o.lower() for o in b.objects) or face_set.intersection(b.faces)]
@@ -64,12 +67,33 @@ class DesignReader:
     def obtain_image_snapshot() -> Image:
         pass
 
-    def _boundaries(self):
+    def _boundaries(self, object_faces):
+        """Read live properties/assignments without parsing the saved project.
+
+        BoundaryObject.props loads the complete .aedt file. Its OO properties
+        and BoundarySetup.GetAssignment instead read the current desktop state.
+        Assignment IDs are resolved against the face IDs already read in bulk.
+        """
         boundaries = []
+        face_ids = {face for faces in object_faces.values() for face in faces}
+        names = {name.lower(): name for name in object_faces}
         for boundary in self.app.boundaries:
-            props = dict(boundary.props)
-            faces = tuple(int(face) for face in props.get("Faces", []))
-            objects = tuple(props.get("Objects", []))
+            props = dict(boundary.properties)
+            faces, objects = [], []
+            for assignment in self.app.oboundary.GetAssignment(boundary.name) or ():
+                text = str(assignment)
+                if text.lower() in names:
+                    objects.append(names[text.lower()])
+                elif text.isdigit():
+                    entity_id = int(text)
+                    if entity_id in face_ids:
+                        faces.append(entity_id)
+                    else:
+                        name = self.oeditor.GetObjectNameByID(entity_id)
+                        if name:
+                            objects.append(str(name))
+            faces, objects = tuple(faces), tuple(objects)
+            props.update(Faces=list(faces), Objects=list(objects))
             center = None
             if faces:
                 centers = [[float(v) for v in self.oeditor.GetFaceCenter(face)] for face in faces]

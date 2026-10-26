@@ -13,19 +13,18 @@ import argparse
 from pathlib import Path
 
 import configs
-from AnsysSession.Action.ExtractCopy import ExtractCopy, original_components
-from AnsysSession.Session import Session
-from AnsysSession.SwitchDesign import analyse_copy, run_bz_procedure
-from Chips import ChipSection, PositionSampler
+from Chips import Chip, ChipSection, PositionSampler
+from Chips.Generators import FileSectionGenerator
 from Chips.Components.utils import print_info
 
 
-def parse_args():
+def parse_args(argv=None):
     parser = argparse.ArgumentParser(description="Solve an AEDT chip project and export the Bz field image above its board.")
     parser.add_argument("path", nargs="?", default=configs.DEFAULT_INPUT_PATH,
                         help=".aedt project file (default: %(default)s)")
     parser.add_argument("--design", help="design to open (default: the project's active design)")
     parser.add_argument("--info", action="store_true", help="also print everything the project can tell about itself")
+    parser.add_argument("--desktop", action="store_true", help="show the AEDT desktop")
 
     analysis = parser.add_argument_group("analysis")
     analysis.add_argument("--setup", default=configs.DEFAULT_SETUP, help="setup to solve (default: %(default)s)")
@@ -43,6 +42,10 @@ def parse_args():
                        help=f"copy the board, spheres and GND/VCC into a new group ({configs.DEFAULT_PREFIX}<n>) "
                             "and analyse that copy")
     which.add_argument("--copy", metavar="GROUP", help=f"analyse an existing copy, e.g. {configs.DEFAULT_PREFIX}1")
+    which.add_argument("--sections", type=Path, help="extract sections from CSV or board/Sphere_positions instructions")
+    copies.add_argument("--extract-only", action="store_true", help="save extracted sections without validation, solving or field export")
+    copies.add_argument("--purge-history", action="store_true",
+                        help="purge modeling history of new copies only, after placement; freezes their geometry")
     copies.add_argument("--rebuild", action="store_true", help="recreate the copy's analysis design if it exists")
 
     chip = parser.add_argument_group("chip parts", "names to use when the automatic choices don't match the model")
@@ -51,18 +54,64 @@ def parse_args():
     chip.add_argument("--spheres", nargs=2, metavar="NAME", default=configs.DEFAULT_SPEHRE,
                       help="the two connection spheres (default: %(default)s)")
     chip.add_argument("--board", help="the board to analyse; needed when the design has several")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if not args.path:
         parser.error("no project file: pass one or set configs.DEFAULT_INPUT_PATH")
+    if not Path(args.path).is_file():
+        parser.error(f"project file does not exist: {args.path}")
+    if args.sections and not args.sections.is_file():
+        parser.error(f"section file does not exist: {args.sections}")
+    if args.extract_only and not (args.extract or args.sections):
+        parser.error("--extract-only requires --extract or --sections")
+    if args.purge_history and not (args.extract or args.sections):
+        parser.error("--purge-history requires --extract or --sections")
     return args
 
 
-def main():
-    args = parse_args()
-    s = Session(args.path, design=args.design)
+def run_sections(session, args):
+    """Validate every file row before the first copy; isolate each pin pair in its own design."""
+    from AnsysSession.Action.CopyandGenerate import CopyandGenerate
+    from AnsysSession.Action.ExtractCopy import original_components
+
+    snapshot = session.snapshot
+    rows = FileSectionGenerator.read_rows(args.sections)
+    boards = list(dict.fromkeys((row.get("board") or "").strip() for _, row in rows))
+    if not all(boards):
+        raise ValueError(f"{args.sections}: every section needs a board name")
+    chip = Chip(original_components(snapshot), gnd=args.gnd, vcc=args.vcc, spheres=args.spheres,
+                boards=boards, units=snapshot.units)
+    candidates = list(FileSectionGenerator(chip, args.sections))
+    source_design = session.design
+    results = []
+    for candidate in candidates:
+        session.switch_design(source_design)
+        job = CopyandGenerate(session, candidate, setup=args.setup, output_dir=args.output,
+                              scan_height=args.scan_height, step=args.step, cores=args.cores,
+                              solve=not args.no_solve, extract_only=args.extract_only,
+                              purge_history=args.purge_history)
+        if job.act() != job.SUCCESS:
+            label = job.failed.label if job.failed else job.label
+            raise RuntimeError(f"{label} failed: {job.error}")
+        results.append(job.result)
+    return results
+
+
+def main(argv=None):
+    args = parse_args(argv)
+    # Keep --help and input checks available without the optional AEDT dependency.
+    from AnsysSession.Action.ExtractCopy import ExtractCopy, original_components
+    from AnsysSession.Session import Session
+    from AnsysSession.SwitchDesign import analyse_copy, run_bz_procedure
+
+    s = Session(args.path, design=args.design, non_graphical=not args.desktop)
     try:
         if args.info:
             s.get_session_info()
+        if args.sections:
+            results = run_sections(s, args)
+            for result in results:
+                print_info(result)
+            return results
         source_design = s.design
         group = args.copy
         if not group:
@@ -80,6 +129,18 @@ def main():
             s.refresh()
             group = extraction.result.group
             print(f"\nExtracted {group}: {list(extraction.result.copies.values())}")
+            if args.purge_history:
+                from AnsysSession.Action.PurgeHistory import PurgeHistory
+                purge = PurgeHistory(s.app, list(extraction.result.copies.values()))
+                if purge.act() != purge.SUCCESS:
+                    raise RuntimeError(f"purge history failed: {purge.error}")
+                s.refresh()
+            if args.extract_only:
+                s.save()
+                result = {"design": s.design, "group": group, "copies": extraction.result.copies,
+                          "history purged": args.purge_history}
+                print_info(result)
+                return result
 
         if group:
             result = analyse_copy(
@@ -92,8 +153,8 @@ def main():
                                       scan_height=args.scan_height, step=args.step, cores=args.cores,
                                       solve=not args.no_solve)
     finally:
-        # run_bz_procedure saved the project at the end; nothing else is saved.
-        s.release()
+        # Successful extraction-only runs also save before release.
+        s.release(close_desktop=not args.desktop)
 
     print(f"\n=== Bz analysis {'=' * 59}")
     print_info(result)

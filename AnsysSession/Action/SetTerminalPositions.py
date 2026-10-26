@@ -10,9 +10,9 @@ class SetTerminalPositions(AnsysAction):
 
     ``pair`` holds NumericalPositionFixed positions; each terminal's
     position_value becomes its pin count, which goes to the variable named in
-    configs.PIN_COUNT_VARIABLES ("PinCount", "PinCountGND"). AEDT then moves
-    each terminal together with its sphere (sphere_VCC, sphere_GND) through the
-    design's expressions, so the spheres are not moved here. The board is not
+    configs.PIN_COUNT_VARIABLES ("PinCount", "PinCountGND"). Geometry only moves
+    if it is driven by these variables in the project; sphere movement is not
+    implemented here. The board is not
     moved and its position value is left unset.
     """
 

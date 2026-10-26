@@ -6,6 +6,7 @@ Session.refresh()). Nothing is saved until save() is called.
 """
 
 from configs import IN_PLACE_OFFSET
+from .GrpcCompatibility import local_grpc_metadata
 
 
 class AedtError(RuntimeError):
@@ -64,6 +65,22 @@ class ModelEditor:
     def delete(self, names):
         if names and not self.modeler.delete(list(names)):
             raise AedtError(f"AEDT could not delete {list(names)}")
+
+    def purge_history(self, names):
+        """Flatten only explicitly named objects; reject an empty/global selection."""
+        names = [names] if isinstance(names, str) else list(names)
+        if not names or any(not isinstance(name, str) or not name.strip() for name in names):
+            raise ValueError("Purge history requires explicit, non-empty object names")
+        names = list(dict.fromkeys(names))
+        missing = [name for name in names if self.modeler.get_object_from_name(name) is None]
+        if missing:
+            raise AedtError(f"Cannot purge history; objects not found: {missing}")
+        try:
+            ok = self.modeler.purge_history(assignment=names)
+        except Exception as e:
+            raise AedtError(f"AEDT could not purge history of {names}: {e}") from e
+        if not ok:
+            raise AedtError(f"AEDT could not purge history of {names}")
 
     def move_to(self, name, position):
         """Move ``name`` so its bounding-box center lands on ``position`` (a Position).
@@ -169,14 +186,16 @@ class ModelEditor:
 
     # --- designs and project ----------------------------------------------
     def set_active_design(self, name):
-        if not self.app.set_active_design(name):
-            raise AedtError(f'AEDT could not switch to design "{name}"')
+        with local_grpc_metadata():
+            if not self.app.set_active_design(name):
+                raise AedtError(f'AEDT could not switch to design "{name}"')
 
     def duplicate_design(self, name):
         """Duplicate the active design and make the duplicate active; returns its name."""
-        if not self.app.duplicate_design(name):
-            raise AedtError(f'AEDT could not duplicate design "{self.app.design_name}"')
-        return self.app.design_name
+        with local_grpc_metadata():
+            if not self.app.duplicate_design(name):
+                raise AedtError(f'AEDT could not duplicate design "{self.app.design_name}"')
+            return self.app.design_name
 
     def delete_design(self, name, fallback_design=None):
         self.app.delete_design(name, fallback_design=fallback_design)

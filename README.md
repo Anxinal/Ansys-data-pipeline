@@ -26,6 +26,7 @@ AnsysSession/              AEDT layer (the only code that imports PyAEDT)
     Export.py              BzExport: export the Bz image (.fld + .npz)
     BzProcedure.py         BzAnalysis then BzExport
     ExtractCopy.py         copy board, spheres, GND/VCC into a new group
+    PurgeHistory.py        optionally flatten modeling history of explicitly selected copies
     CopyandGenerate.py     copy one SectionCandidate, set its terminals, validate, solve, export
     SwitchBackToMain.py    return to the main design before the next copy
     SetTerminalPositions.py  place VCC/GND by their pin-count variables (PinCount, PinCountGND)
@@ -60,7 +61,37 @@ python main.py path/to/chip.aedt --cores 8                  # solve and export B
 python main.py path/to/chip.aedt --no-solve                 # reuse the existing solution
 python main.py path/to/chip.aedt --extract                  # new copy BOARD_<n>, then analyse it
 python main.py path/to/chip.aedt --copy BOARD_1             # analyse an existing copy
+python main.py path/to/chip.aedt --desktop --sections to_test.txt --extract-only --design Maxwell3DDesign3
 ```
+
+`--desktop` opens the AEDT GUI. `--sections` accepts the CSV format below or one instruction per line:
+
+```text
+board = L4L3_Separate87 Sphere_positions = 399 258
+```
+
+The first pin is VCC, the second GND. Board names must match the project exactly.
+All instructions are checked before copying. `--extract-only` copies just the selected sheet,
+two spheres and two terminals into a group in the existing design, then saves the project and
+`copies.json` (including the requested pins as metadata). It does not create another design or
+change the source design's global pin variables. Geometry is copied in place; this mode does
+not implement sphere or terminal repositioning. It skips validation, solving, and field export.
+With `--desktop`, the desktop and project remain open for inspection after Python releases its session.
+
+For slow runs, append `--purge-history` to `--sections` or `--extract`. This runs the
+`PurgeHistory` action only on the new copies, before saving (and after terminal placement
+when generating Bz). Purging freezes their current geometry and removes editable history,
+including expression-driven placement, so it is disabled by default. The source objects'
+history is preserved. This can reduce later history regeneration; it does not accelerate the
+initial copy operation, and a runtime improvement has not been benchmarked.
+
+The action can also be used explicitly: `PurgeHistory(session.app, copied_names).act()`
+(import from `AnsysSession.Action.PurgeHistory`), followed by `session.refresh()`.
+
+Design switching/duplication includes a scoped compatibility guard for PyAEDT 1.0.1:
+its internal `AedtAPI` connection metadata is stored locally so activation of a newly
+pasted design does not trigger a remote `GetPropNames` lookup. Actual AEDT property
+writes retain their normal behavior, and the guard is removed after each operation.
 
 Use `--gnd`, `--vcc`, `--spheres`, `--board` when the automatic part detection doesn't match
 your model, and `--help` for the rest. Results go to `data_export_default/` (`configs.DEFAULT_OUTPUT_DIR`):
@@ -125,4 +156,4 @@ The **ansysSession** package deals with abstracted interaction directly with the
 
 The **chips** package deals with the inner data processing of chips, including position selection and candidate generationt that does not require aedt to intervene
 
-The **MField** Data deals with data augmentation after the data is already generated 
+The **MField** Data deals with data augmentation after the data is already generated

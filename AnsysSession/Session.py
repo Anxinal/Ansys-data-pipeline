@@ -14,10 +14,9 @@ from .Report import ProjectReport
 
 class Session:
 
-    def __init__(self, path: str, design=None):
+    def __init__(self, path: str, design=None, non_graphical=True):
         self.path = path
-        # No GUI: everything below goes through the AEDT API.
-        desktop = Desktop(non_graphical=True, new_desktop=True)
+        desktop = Desktop(non_graphical=non_graphical, new_desktop=True)
         try:
             # The design's app object, e.g. ansys.aedt.core.Maxwell3d (not a Desktop).
             self.app = desktop.load_project(path, design_name=design)
@@ -91,6 +90,6 @@ class Session:
         """Write the edits made in this session to the .aedt project."""
         self.editor.save()
 
-    def release(self):
-        """Release the session"""
-        self.app.release_desktop(close_projects=True, close_desktop=True)
+    def release(self, close_desktop=True):
+        """Release Python's session, optionally leaving the GUI/project open."""
+        self.app.release_desktop(close_projects=close_desktop, close_desktop=close_desktop)

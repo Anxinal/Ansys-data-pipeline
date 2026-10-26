@@ -1,0 +1,1 @@
+board = L4L3_Separate87 Sphere_positions = 399 258
