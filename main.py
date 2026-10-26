@@ -5,8 +5,8 @@ Usage:
     .venv/bin/python main.py path/to/project.aedt --extract     # new copy, then analyse it
     .venv/bin/python main.py path/to/project.aedt --copy BOARD_1 # analyse an existing copy
 
-Run with --help for the options. The Bz image goes to configs.DEFAULT_OUTPUT_DIR
-unless --output is given.
+Run with --help for the options. Options with a setting in configs.py default to it,
+and the project path defaults to configs.DEFAULT_INPUT_PATH.
 """
 
 import argparse
@@ -22,7 +22,8 @@ from Chips.Components.utils import print_info
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Solve an AEDT chip project and export the Bz field image above its board.")
-    parser.add_argument("path", help=".aedt project file")
+    parser.add_argument("path", nargs="?", default=configs.DEFAULT_INPUT_PATH,
+                        help=".aedt project file (default: %(default)s)")
     parser.add_argument("--design", help="design to open (default: the project's active design)")
     parser.add_argument("--info", action="store_true", help="also print everything the project can tell about itself")
 
@@ -39,16 +40,21 @@ def parse_args():
     copies = parser.add_argument_group("copies", "analyse an extracted copy in its own analysis design")
     which = copies.add_mutually_exclusive_group()
     which.add_argument("--extract", action="store_true",
-                       help="copy the board, spheres and GND/VCC into a new group (BOARD_<n>) and analyse that copy")
-    which.add_argument("--copy", metavar="GROUP", help="analyse an existing copy, e.g. BOARD_1")
+                       help=f"copy the board, spheres and GND/VCC into a new group ({configs.DEFAULT_PREFIX}<n>) "
+                            "and analyse that copy")
+    which.add_argument("--copy", metavar="GROUP", help=f"analyse an existing copy, e.g. {configs.DEFAULT_PREFIX}1")
     copies.add_argument("--rebuild", action="store_true", help="recreate the copy's analysis design if it exists")
 
     chip = parser.add_argument_group("chip parts", "names to use when the automatic choices don't match the model")
     chip.add_argument("--gnd", default=configs.DEFAULT_GND, help="GND component or excitation (default: %(default)s)")
     chip.add_argument("--vcc", default=configs.DEFAULT_VCC, help="VCC component or excitation (default: %(default)s)")
-    chip.add_argument("--spheres", nargs=2, metavar="NAME", help="the two connection spheres")
+    chip.add_argument("--spheres", nargs=2, metavar="NAME", default=configs.DEFAULT_SPEHRE,
+                      help="the two connection spheres (default: %(default)s)")
     chip.add_argument("--board", help="the board to analyse; needed when the design has several")
-    return parser.parse_args()
+    args = parser.parse_args()
+    if not args.path:
+        parser.error("no project file: pass one or set configs.DEFAULT_INPUT_PATH")
+    return args
 
 
 def main():

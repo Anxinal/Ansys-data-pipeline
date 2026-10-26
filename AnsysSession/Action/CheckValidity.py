@@ -1,10 +1,7 @@
 """Validity check of the active design: AEDT's own Validation Check
-(Simulation > Validation Check, oDesign.ValidateDesign)."""
-
-from pathlib import Path
+(Simulation > Validation Check, oDesign.ValidateDesign), run through DesignReader.valid_check."""
 
 from .Action import AnsysAction
-from .Export import file_stem
 
 
 class CheckValidity(AnsysAction):
@@ -19,16 +16,9 @@ class CheckValidity(AnsysAction):
         self.messages = []
 
     def act(self):
-        app = self.app
-        log_file = Path(app.working_directory) / f"{file_stem(app.design_name)}_validation.log"
-        log_file.unlink(missing_ok=True)
-        passed = app.validate_simple(log_file) == 1
-        if log_file.is_file():
-            self.messages = [line.rstrip() for line in log_file.read_text(errors="replace").splitlines() if line.strip()]
-
+        passed, self.messages, log_file = self.reader.valid_check()
         if not passed:
             details = "\n".join(self.messages) or f"see {log_file}"
-            self.error = f'AEDT validation check failed for design "{app.design_name}":\n{details}'
+            self.error = f'AEDT validation check failed for design "{self.app.design_name}":\n{details}'
             return self.FAILURE
         return self.SUCCESS
-

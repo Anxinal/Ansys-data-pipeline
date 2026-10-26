@@ -7,7 +7,7 @@ DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parent / "Result" / "Bz"
 DEFAULT_SETUP = "Setup1"
 DEFAULT_SCAN_HEIGHT = 0.060  # image plane height above the board's top face
 DEFAULT_GRID_STEP = 0.030  # image pixel size; also the Position grid step
-
+DEFAULT_INPUT_PATH = "E:/An Xiao/data/xx.aedt"
 # Fields-calculator named expression for the smoothed z-component of B;
 # BzAnalysis creates it in the project when it is missing.
 BZ_EXPRESSION = "smoothscalBz"
@@ -17,10 +17,11 @@ BZ_EXPRESSION = "smoothscalBz"
 NAMED_EXPRESSIONS = (BZ_EXPRESSION,)
 
 # --- Chip model (Chips/) ---
-# Default names of the GND and VCC components or excitations (main.py's --gnd/--vcc).
+# Default names of the GND and VCC components or excitations and of the two
+# connection spheres (main.py's --gnd/--vcc/--spheres).
 DEFAULT_GND = "GND"
 DEFAULT_VCC = "VCC"
-
+DEFAULT_SPEHRE = ["Sphere_GND", "Sphere_VCC"]
 # Name fragments (case-insensitive) used to find the board, and the spheres when
 # their geometry alone doesn't pick out exactly two.
 BOARD_KEYWORDS = ("board", "pcb")

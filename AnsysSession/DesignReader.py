@@ -6,13 +6,15 @@ so the chip layer never calls AEDT. details() and material() read the extras a
 report shows, on demand.
 """
 
+from pathlib import Path
+
 from ansys.aedt.core.modules.material import MatProperties
 
 from Chips.Components import Boundary, Component, Material
 from Chips.DesignSnapshot import DesignSnapshot
 from configs import TYPE_GROUPS
 from PIL import Image
-from .utils import safe
+from .utils import file_stem, safe
 
 
 class DesignReader:
@@ -112,3 +114,18 @@ class DesignReader:
             if value is not None and not isinstance(value, str):
                 properties[prop] = f"{value.value} {value.unit or ''}".rstrip()
         return Material(material.name, bool(safe(material.is_conductor) is True), properties)
+
+    def valid_check(self):
+        """Run AEDT's Validation Check (oDesign.ValidateDesign) on the active design.
+
+        Returns (passed, messages, log_file): whether the design passed, the
+        non-empty lines AEDT wrote to the log, and the log's path.
+        """
+        app = self.app
+        log_file = Path(app.working_directory) / f"{file_stem(app.design_name)}_validation.log"
+        log_file.unlink(missing_ok=True)  # so a log from an earlier check is never read as this one's
+        passed = app.validate_simple(log_file) == 1
+        messages = []
+        if log_file.is_file():
+            messages = [line.rstrip() for line in log_file.read_text(errors="replace").splitlines() if line.strip()]
+        return passed, messages, log_file

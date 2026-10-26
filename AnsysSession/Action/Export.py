@@ -16,13 +16,9 @@ import numpy as np
 
 from configs import BZ_EXPRESSION, DEFAULT_GRID_STEP, DEFAULT_OUTPUT_DIR, DEFAULT_SCAN_HEIGHT, DEFAULT_SETUP
 
+from ..utils import file_stem
 from .Action import AnsysAction
 from .Analysis import solution_name
-
-
-def file_stem(name):
-    """Make an AEDT name (which may contain spaces or colons) safe for a file name."""
-    return re.sub(r"[^\w.-]+", "_", name).strip("_")
 
 
 def load_bz_image(fld_path):
