@@ -3,12 +3,15 @@
 Run from the project root:  .venv/bin/python -m unittest discover tests
 """
 
+import os
 import sys
+import tempfile
 import unittest
 
 from Chips import (Board, Chip, ChipSection, CopyRecord, DesignSnapshot, NumericalPositionFixed, Position, PositionSampler, Terminal,
                    TerminalPositionPair)
 from Chips.Components import Boundary, Component, SolidComponent
+from Chips.Generators import FileSectionGenerator, SectionCandidate
 
 
 def solid(name, box, faces=6, material="copper", boundaries=()):
@@ -60,6 +63,13 @@ class ChipTests(unittest.TestCase):
     def test_spheres_paired_by_distance_to_vcc(self):
         near_vcc, near_gnd = Chip(chip_components()).get_spheres()
         self.assertEqual((near_vcc.name, near_gnd.name), ("Sphere1", "Sphere2"))
+
+    def test_spheres_paired_by_name(self):
+        # Named against their distance: the sphere nearer VCC is GND's.
+        components = chip_components()
+        components[3].name, components[4].name = "BOARD_1_sphere_GND", "BOARD_1_sphere_VCC"
+        vcc_sphere, gnd_sphere = Chip(components).get_spheres()
+        self.assertEqual((vcc_sphere.name, gnd_sphere.name), ("BOARD_1_sphere_VCC", "BOARD_1_sphere_GND"))
 
     def test_terminal_by_excitation(self):
         excitation = Boundary("GND_in", "Current", faces=(0,), center=(10.0, 4.5, 1.1))
@@ -147,6 +157,42 @@ class PositionTests(unittest.TestCase):
         PositionSampler.reset()
         self.assertEqual(PositionSampler().sample_pair_batch(cells, 3), first)
         self.assertIsInstance(first[0], TerminalPositionPair)
+
+
+class GeneratorTests(unittest.TestCase):
+    def write_csv(self, text):
+        handle = tempfile.NamedTemporaryFile("w", suffix=".csv", delete=False)
+        with handle:
+            handle.write(text)
+        self.addCleanup(os.unlink, handle.name)
+        return handle.name
+
+    def test_file_generator_reads_candidates(self):
+        chip = Chip(chip_components(second_board=True))
+        path = self.write_csv("board,vcc_pin,gnd_pin,sphere_vcc,sphere_gnd\n"
+                              "Board2,126,166,,\n"
+                              "chipboard,G7,47,Sphere1,Sphere2\n")
+        first, second = FileSectionGenerator(chip, path)
+        self.assertIsInstance(first, SectionCandidate)
+        self.assertEqual(first.section.board.name, "Board2")
+        self.assertEqual((first.pair.a.value, first.pair.b.value), (126, 166))
+        self.assertEqual(first.pair.a.z, first.section.vcc.center[2])  # each terminal keeps its height
+        self.assertEqual(second.section.board.name, "ChipBoard")
+        self.assertEqual((second.pair.a.value, second.pair.b.value), (126, 47))  # G7 = row 6, column 6
+
+    def test_file_generator_reports_the_bad_line(self):
+        chip = Chip(chip_components())
+        with self.assertRaisesRegex(LookupError, "line 3"):
+            list(FileSectionGenerator(chip, self.write_csv("board,vcc_pin,gnd_pin\nChipBoard,1,2\nNope,1,2\n")))
+        with self.assertRaisesRegex(ValueError, "gnd_pin"):
+            list(FileSectionGenerator(chip, self.write_csv("board,vcc_pin\nChipBoard,1\n")))
+        with self.assertRaisesRegex(ValueError, "both"):
+            list(FileSectionGenerator(chip, self.write_csv("board,vcc_pin,gnd_pin,sphere_vcc\nChipBoard,1,2,Sphere1\n")))
+
+    def test_candidate_needs_numerical_positions(self):
+        section = ChipSection(chip_components())
+        with self.assertRaises(TypeError):
+            SectionCandidate(section, TerminalPositionPair(Position(0, 0), Position(1, 0)))
 
 
 class SnapshotAndRecordTests(unittest.TestCase):

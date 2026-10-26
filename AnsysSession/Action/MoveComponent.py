@@ -15,11 +15,8 @@ class MoveComponent(AnsysAction):
 
     def act(self) -> int:
         """Move a component within the current design app"""
-        center = self.component.center
-        target = self.to_position.coordinates(z=center[2])
-        vector = [t - c for t, c in zip(target, center)]
         try:
-            self.editor.move(self.component.name, vector)
+            self.editor.move_to(self.component.name, self.to_position)
         except AedtError as e:
             self.error = f"{e} (target {self.to_position})"
             return self.FAILURE

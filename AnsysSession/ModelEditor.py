@@ -65,13 +65,19 @@ class ModelEditor:
         if names and not self.modeler.delete(list(names)):
             raise AedtError(f"AEDT could not delete {list(names)}")
 
-    # --- positions --------------------------------------------------------
-    def set_position_value(self, name, value):
-        """PLACEHOLDER: set object ``name``'s position value in AEDT, which shifts it (and its sphere).
+    def move_to(self, name, position):
+        """Move ``name`` so its bounding-box center lands on ``position`` (a Position).
 
-        ``value`` is a NumericalPositionFixed.value. Raise AedtError when AEDT refuses.
+        The center is read from AEDT, so earlier moves are taken into account. A
+        position without a height (z=None) keeps the object's own height; a
+        NumericalPositionFixed always has one.
         """
-        raise NotImplementedError("ModelEditor.set_position_value is not wired to AEDT yet")
+        if self.modeler.get_object_from_name(name) is None:
+            raise AedtError(f'No object "{name}" to move')
+        box = [float(v) for v in self.modeler.oeditor.GetObjectBoundingBox(name)]
+        center = [(box[i] + box[i + 3]) / 2 for i in range(3)]
+        target = position.coordinates(z=center[2])
+        self.move(name, [t - c for t, c in zip(target, center)])
 
     # --- properties -------------------------------------------------------
     def edit(self, section, name, /, **changes):
@@ -109,6 +115,17 @@ class ModelEditor:
         if variable is None:
             raise KeyError(f'No variable named "{name}"')
         return self._set_properties(variable, changes, "variables")
+
+    def set_pin_count(self, variable, count):
+        """Set the pin-count design variable (e.g. "PinCount") to ``count``; the geometry driven by it moves."""
+        expression = str(count)
+        try:
+            read_back = self.set_variable(variable, expression=expression)["expression"]
+        except KeyError as e:
+            raise AedtError(e.args[0]) from None
+        # PyAEDT only logs when AEDT rejects an expression, so check what was kept.
+        if read_back != expression:
+            raise AedtError(f'AEDT kept "{variable}" at {read_back} instead of {expression}')
 
     def edit_item(self, kind, name, /, **changes):
         """Change properties of a setup, boundary or mesh operation and push them to AEDT once."""

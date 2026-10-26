@@ -70,23 +70,40 @@ class Chip:
             )
         return [Board(c) for c in candidates]
 
-    def section(self, board):
-        """The ChipSection of one of the chip's boards (a Board or its name), with the same terminals and spheres."""
+    def section(self, board, gnd=None, vcc=None, spheres=None):
+        """The ChipSection of one of the chip's boards (a Board or its name).
+
+        gnd, vcc and spheres name other parts for the section; by default it has
+        the chip's own terminals and spheres.
+        """
         from .ChipSection import ChipSection  # ChipSection subclasses Chip
 
         name = board if isinstance(board, str) else board.name
         if name.lower() not in {b.name.lower() for b in self.boards}:
             raise LookupError(f'No board "{name}" in this chip. Boards: {[b.name for b in self.boards]}')
-        gnd, vcc = self._terminal_names
-        return ChipSection(self.components, gnd, vcc, spheres=[s.name for s in self.spheres], board=name,
-                           units=self.units)
+        own_gnd, own_vcc = self._terminal_names
+        return ChipSection(self.components, gnd or own_gnd, vcc or own_vcc,
+                           spheres=spheres or [s.name for s in self.spheres], board=name, units=self.units)
 
     def get_terminals(self):
         """(VCC terminal, GND terminal), both Components."""
         return self.vcc, self.gnd
 
     def get_spheres(self):
-        """(sphere nearest VCC, the other sphere), by distance to the VCC position."""
+        """(VCC's sphere, GND's sphere).
+
+        By name when each sphere names one terminal (e.g. sphere_VCC and
+        sphere_GND, or their copies BOARD_1_sphere_VCC, ...); otherwise the
+        sphere nearest the VCC position is VCC's.
+        """
+        by_label = {}
+        for sphere in self.spheres:
+            labels = [label for label in ("VCC", "GND") if label.lower() in sphere.name.lower()]
+            if len(labels) == 1:
+                by_label[labels[0]] = sphere
+        if len(by_label) == 2:
+            return by_label["VCC"], by_label["GND"]
+
         def distance_to_vcc(sphere):
             return sum((a - b) ** 2 for a, b in zip(sphere.center, self.vcc.point))
 

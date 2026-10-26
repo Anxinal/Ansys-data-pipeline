@@ -11,7 +11,7 @@ from ansys.aedt.core.modules.material import MatProperties
 from Chips.Components import Boundary, Component, Material
 from Chips.DesignSnapshot import DesignSnapshot
 from configs import TYPE_GROUPS
-
+from PIL import Image
 from .utils import safe
 
 
@@ -58,6 +58,9 @@ class DesignReader:
 
         groups = {group: tuple(oeditor.GetObjectsInGroup(group)) for group in self.group_names()}
         return DesignSnapshot(app.design_name, app.modeler.model_units, tuple(components), boundaries, groups)
+    
+    def obtain_image_snapshot() -> Image:
+        pass
 
     def _boundaries(self):
         boundaries = []

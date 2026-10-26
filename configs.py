@@ -35,8 +35,14 @@ TYPE_GROUPS = {"Solids": "Solid", "Sheets": "Sheet", "Lines": "Line"}
 # --- Position sampling (Chips/Positions/PositionSampler.py) ---
 SAMPLER_SEED = 0  # seed of the sampler's random generator; None for a different run each time
 
-# Largest column number in position labels such as "A15" (Position.from_string).
+# Largest column number in position labels such as "A15" (NumericalPositionFixed.from_string);
+# also the grid width of the pin count. Must match the design's xballcount variable.
 MAX_COLUMN = 20
+
+# --- Pin-count placement (AnsysSession/Action/SetTerminalPositions.py) ---
+# Design variables holding the ball each terminal sits on, counted row by row from 0
+# (Position.num). The terminal and its sphere follow them through the design's expressions.
+PIN_COUNT_VARIABLES = {"VCC": "PinCount", "GND": "PinCountGND"}
 
 # --- Extraction (Extract.py) ---
 DEFAULT_PREFIX = "BOARD_"  # copies go to groups BOARD_1, BOARD_2, ...
@@ -46,3 +52,6 @@ DEFAULT_PREFIX = "BOARD_"  # copies go to groups BOARD_1, BOARD_2, ...
 IN_PLACE_OFFSET = [1.0, 0.0, 0.0]
 
 EXPORT_DATA_FOLDER = "/data"
+
+# For CNN image clipping in no. of pixels
+GRID_SIZE = []

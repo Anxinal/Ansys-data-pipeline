@@ -26,15 +26,17 @@ AnsysSession/              AEDT layer (the only code that imports PyAEDT)
     Export.py              BzExport: export the Bz image (.fld + .npz)
     BzProcedure.py         BzAnalysis then BzExport
     ExtractCopy.py         copy board, spheres, GND/VCC into a new group
-    CopyandGenerate.py     copy one board section, set its terminals, validate, solve, export
+    CopyandGenerate.py     copy one SectionCandidate, set its terminals, validate, solve, export
     SwitchBackToMain.py    return to the main design before the next copy
-    SetTerminalPositions.py  set VCC/GND position values (ModelEditor.set_position_value)
+    SetTerminalPositions.py  place VCC/GND by their pin-count variables (PinCount, PinCountGND)
     MoveComponent.py, MoveCurrentConnectors.py, CheckValidity.py
 Chips/                     chip layer (pure Python, no AEDT)
   DesignSnapshot.py        one design, read at one moment
   Components/              Component (+ Solid/Sheet/Line), Material, Boundary
   Chip.py, Terminal.py     finds GND/VCC, the two spheres and the boards
   ChipSection.py           a chip with one board: the section copied and analysed
+  Generators/              FeasibleChipSectionGenerator (base), FileSectionGenerator (CSV),
+                           SectionCandidate (a ChipSection + its VCC/GND positions)
   Positions/               Position (grid cell), position pairs, PositionSampler
 configs.py                 all defaults (setup, grid step, scan height, names, ...)
 tests/                     chip-layer tests on plain data
@@ -92,22 +94,35 @@ from AnsysSession.SwitchDesign import analyse_copy
 result = analyse_copy(session, "BOARD_1", cores=8)
 ```
 
-To generate data for several boards of the main design, one copy at a time (each copy's
-VCC/GND are set to a pair of `NumericalPositionFixed` positions):
+To generate data for several chip sections, one copy at a time, list them in a CSV file
+(one row per section; `vcc_pin`/`gnd_pin` are pin counts such as `126` or cell labels such as `G7`,
+and the optional `vcc`, `gnd`, `sphere_vcc`, `sphere_gnd` columns name other parts):
+
+```
+board,vcc_pin,gnd_pin
+Board1,126,166
+Board2,G7,I9
+```
 
 ```python
 from AnsysSession.Action.CopyandGenerate import CopyandGenerate
 from AnsysSession.Action.SwitchBackToMain import SwitchBackToMain
-from Chips import Chip, NumericalPositionFixed, TerminalPositionPair
+from Chips import Chip
+from Chips.Generators import FileSectionGenerator
 
 chip = Chip(original_components(session.snapshot), units=session.snapshot.units)   # all boards
-pair = TerminalPositionPair(NumericalPositionFixed.from_string("A3", z=1.2),
-                            NumericalPositionFixed.from_string("C7", z=1.2))
-for board in chip.boards:
-    job = CopyandGenerate(session, chip, board, pair, cores=8)
+for candidate in FileSectionGenerator(chip, "sections.csv"):
+    job = CopyandGenerate(session, candidate, cores=8)
     if job.act() != job.SUCCESS:
         print(f"{job.failed.label} failed: {job.error}")
     SwitchBackToMain(session, job.main_design).act()
 ```
 
 Load an exported image with `numpy.load(result["npz file"])`.
+
+## Pakcages
+The **ansysSession** package deals with abstracted interaction directly with the ansys aedt session
+
+The **chips** package deals with the inner data processing of chips, including position selection and candidate generationt that does not require aedt to intervene
+
+The **MField** Data deals with data augmentation after the data is already generated 

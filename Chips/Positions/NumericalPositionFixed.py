@@ -12,8 +12,9 @@ class NumericalPositionFixed(Position):
 
     Made from a label such as "A15" (from_string) or a running cell number
     (from_number); z must always be given. Placing a terminal or the board on
-    one doesn't move the object: it sets the part's ``position_value`` to this
-    position's ``value`` (see NumericallyPlaced.place_at).
+    one records this position's ``value`` (its pin count) as the part's
+    ``position_value`` (NumericallyPlaced.place_at); in AEDT, setting a
+    terminal's pin-count variable moves it (see SetTerminalPositions).
     """
 
     def __post_init__(self):
@@ -52,8 +53,6 @@ class NumericalPositionFixed(Position):
 
     @property
     def value(self):
-        """PLACEHOLDER: the number a part placed on this cell gets as its position_value.
-
-        Replace this with the real mapping. For now it is the running cell number.
-        """
-        return float(self.num)
+        """The pin count of this cell: the ball index row by row from 0 (Position.num), as the
+        design variables in configs.PIN_COUNT_VARIABLES take it."""
+        return self.num

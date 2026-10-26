@@ -1,16 +1,16 @@
-"""Copy one board section of the main chip, set its terminals to a position pair, then validate, solve and export.
+"""Copy one board section of the main chip, place its terminals by pin count, then validate, solve and export.
 
-Typical loop over the main design's boards (run SwitchBackToMain between copies):
+Typical loop over a generator's candidates (run SwitchBackToMain between copies):
 
     chip = Chip(original_components(session.snapshot), units=session.snapshot.units)
-    for board, pair in jobs:
-        job = CopyandGenerate(session, chip, board, pair, cores=8)
+    for candidate in FileSectionGenerator(chip, "sections.csv"):
+        job = CopyandGenerate(session, candidate, cores=8)
         if job.act() != job.SUCCESS:
             print(f"{job.failed.label} failed: {job.error}")
         SwitchBackToMain(session, job.main_design).act()
 """
 
-from Chips import Chip, TerminalPositionPair
+from Chips.Generators import SectionCandidate
 from configs import DEFAULT_GRID_STEP, DEFAULT_OUTPUT_DIR, DEFAULT_PREFIX, DEFAULT_SCAN_HEIGHT, DEFAULT_SETUP
 
 from ..ModelEditor import AedtError
@@ -23,28 +23,29 @@ from .SetTerminalPositions import SetTerminalPositions
 
 
 class CopyandGenerate(AnsysProcedure):
-    """Copy ``board``'s section of ``chip`` and generate its Bz data; ``result`` is the export summary.
+    """Copy a candidate's chip section and generate its Bz data; ``result`` is the export summary.
 
-    session   the open Session, with the main design active
-    chip      the main design's Chip, e.g. Chip(original_components(snapshot))
-    board     one of chip.boards (a Board or its name)
-    pair      TerminalPositionPair of NumericalPositionFixed positions: a for VCC, b for GND
+    session     the open Session, with the main design active
+    candidate   a SectionCandidate (e.g. from a FeasibleChipSectionGenerator): the
+                ChipSection to copy and the pair its VCC (a) and GND (b) go to
 
-    The board, the two spheres and GND/VCC are copied in place into the next
-    "<prefix><n>" group (ExtractCopy). In the copy's analysis design, the copied
-    terminals are set to ``pair`` (SetTerminalPositions), then the design is
-    validated (CheckValidity), solved and exported (BzProcedure) and the project
-    saved. The analysis design is left active: SwitchBackToMain returns to
+    The section's board, two spheres and GND/VCC are copied in place into the next
+    "<prefix><n>" group (ExtractCopy). In the copy's analysis design, where only
+    that copy remains, the pin-count variables are set from the pair
+    (SetTerminalPositions: PinCount for VCC, PinCountGND for GND), which moves
+    each terminal with its sphere. Then the design is validated (CheckValidity),
+    solved and exported at those values (BzProcedure) and the project saved.
+    The analysis design is left active: SwitchBackToMain returns to
     ``main_design``.
     """
 
-    def __init__(self, session, chip: Chip, board, pair: TerminalPositionPair, setup=DEFAULT_SETUP,
-                 output_dir=DEFAULT_OUTPUT_DIR, scan_height=DEFAULT_SCAN_HEIGHT, step=DEFAULT_GRID_STEP,
-                 cores=None, solve=True, prefix=DEFAULT_PREFIX):
+    def __init__(self, session, candidate: SectionCandidate, setup=DEFAULT_SETUP, output_dir=DEFAULT_OUTPUT_DIR,
+                 scan_height=DEFAULT_SCAN_HEIGHT, step=DEFAULT_GRID_STEP, cores=None, solve=True,
+                 prefix=DEFAULT_PREFIX):
         super().__init__([], session.app, "Copy_and_Generate")  # the steps after the copy need the copy
         self.session = session
-        self.section = chip.section(board)
-        self.pair = pair
+        self.section = candidate.section
+        self.pair = candidate.pair
         self.bz_options = dict(setup=setup, output_dir=output_dir, scan_height=scan_height, step=step,
                                cores=cores, solve=solve)
         self.prefix = prefix
@@ -77,6 +78,7 @@ class CopyandGenerate(AnsysProcedure):
             return status
 
         session.save()
-        self.result = {"design": design, "group": group, "VCC": str(self.pair.a), "GND": str(self.pair.b),
-                       **bz.result}
+        self.result = {"design": design, "group": group,
+                       "VCC pin count": copy.vcc.position_value, "GND pin count": copy.gnd.position_value,
+                       "VCC": str(self.pair.a), "GND": str(self.pair.b), **bz.result}
         return self.SUCCESS
