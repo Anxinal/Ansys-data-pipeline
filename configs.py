@@ -7,7 +7,7 @@ DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parent / "Result" / "Bz"
 DEFAULT_SETUP = "Setup1"
 DEFAULT_SCAN_HEIGHT = 0.060  # image plane height above the board's top face
 DEFAULT_GRID_STEP = 0.030  # image pixel size; also the Position grid step
-DEFAULT_INPUT_PATH = "E:/An Xiao/data/xx.aedt"
+DEFAULT_INPUT_PATH = "E:/An Xiao/data/L4321_M16.aedt"
 # Fields-calculator named expression for the smoothed z-component of B;
 # BzAnalysis creates it in the project when it is missing.
 BZ_EXPRESSION = "smoothscalBz"

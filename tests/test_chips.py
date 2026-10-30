@@ -189,6 +189,29 @@ class GeneratorTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "both"):
             list(FileSectionGenerator(chip, self.write_csv("board,vcc_pin,gnd_pin,sphere_vcc\nChipBoard,1,2,Sphere1\n")))
 
+    def test_instruction_format_preserves_pin_order_and_height(self):
+        components = chip_components()
+        components[0].name = "L4L3_Separate_87"
+        chip = Chip(components, boards=["L4L3_Separate_87"])
+        path = self.write_csv("board = L4L3_Separate_87 Sphere_positions = 399 258\n")
+        candidate, = FileSectionGenerator(chip, path)
+        self.assertEqual(candidate.section.board.name, "L4L3_Separate_87")
+        self.assertEqual((candidate.pair.a.value, candidate.pair.b.value), (399, 258))
+        self.assertEqual(candidate.pair.a.z, chip.vcc.center[2])
+        self.assertEqual(candidate.pair.b.z, chip.gnd.center[2])
+
+    def test_instruction_format_reports_malformed_line(self):
+        chip = Chip(chip_components())
+        path = self.write_csv("board = ChipBoard Sphere_positions = 399 258\n\n"
+                              "board = ChipBoard Sphere_positions = 1\n")
+        with self.assertRaisesRegex(ValueError, "line 3"):
+            list(FileSectionGenerator(chip, path))
+
+    def test_empty_section_file_rejected(self):
+        for text in ("", "board,vcc_pin,gnd_pin\n"):
+            with self.assertRaisesRegex(ValueError, "no section instructions"):
+                FileSectionGenerator.read_rows(self.write_csv(text))
+
     def test_candidate_needs_numerical_positions(self):
         section = ChipSection(chip_components())
         with self.assertRaises(TypeError):
@@ -207,6 +230,9 @@ class SnapshotAndRecordTests(unittest.TestCase):
         record = CopyRecord("BOARD_1", "D1", roles={"sphere_vcc": "a", "sphere_gnd": "b"}, copies={"S1": "a"})
         self.assertEqual(CopyRecord.from_dict(record.to_dict()), record)
         self.assertEqual(record.spheres, ["a", "b"])
+        placed = CopyRecord("BOARD_1", "D1", pin_counts={"VCC": 399, "GND": 258}, analysis_design="D1_BOARD_1")
+        self.assertEqual(CopyRecord.from_dict(placed.to_dict()), placed)
+        self.assertEqual(CopyRecord.from_dict({"group": "old", "source_design": "D1"}).pin_counts, {})
 
     def test_chip_layer_does_not_load_pyaedt(self):
         self.assertFalse(any(name.startswith("ansys") for name in sys.modules))

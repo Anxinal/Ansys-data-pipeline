@@ -10,15 +10,19 @@ Typical loop over a generator's candidates (run SwitchBackToMain between copies)
         SwitchBackToMain(session, job.main_design).act()
 """
 
+from dataclasses import replace
+
 from Chips.Generators import SectionCandidate
 from configs import DEFAULT_GRID_STEP, DEFAULT_OUTPUT_DIR, DEFAULT_PREFIX, DEFAULT_SCAN_HEIGHT, DEFAULT_SETUP
 
 from ..ModelEditor import AedtError
+from ..CopyStore import CopyStore
 from ..SwitchDesign import copy_chip, switch_to_copy
 from .Action import AnsysProcedure
 from .BzProcedure import BzProcedure
 from .CheckValidity import CheckValidity
 from .ExtractCopy import ExtractCopy
+from .PurgeHistory import PurgeHistory
 from .SetTerminalPositions import SetTerminalPositions
 
 
@@ -32,16 +36,21 @@ class CopyandGenerate(AnsysProcedure):
     The section's board, two spheres and GND/VCC are copied in place into the next
     "<prefix><n>" group (ExtractCopy). In the copy's analysis design, where only
     that copy remains, the pin-count variables are set from the pair
-    (SetTerminalPositions: PinCount for VCC, PinCountGND for GND), which moves
-    each terminal with its sphere. Then the design is validated (CheckValidity),
+    (SetTerminalPositions: PinCount for VCC, PinCountGND for GND). Only geometry
+    driven by those expressions follows them; spheres are not explicitly moved.
+    Then the design is validated (CheckValidity),
     solved and exported at those values (BzProcedure) and the project saved.
     The analysis design is left active: SwitchBackToMain returns to
     ``main_design``.
+
+    With extract_only=True, copy only the five selected objects in the source
+    design and record the requested pins as metadata. Do not duplicate a design
+    or change its global pin variables. Geometry stays in place.
     """
 
     def __init__(self, session, candidate: SectionCandidate, setup=DEFAULT_SETUP, output_dir=DEFAULT_OUTPUT_DIR,
                  scan_height=DEFAULT_SCAN_HEIGHT, step=DEFAULT_GRID_STEP, cores=None, solve=True,
-                 prefix=DEFAULT_PREFIX):
+                 prefix=DEFAULT_PREFIX, extract_only=False, purge_history=False):
         super().__init__([], session.app, "Copy_and_Generate")  # the steps after the copy need the copy
         self.session = session
         self.section = candidate.section
@@ -49,6 +58,8 @@ class CopyandGenerate(AnsysProcedure):
         self.bz_options = dict(setup=setup, output_dir=output_dir, scan_height=scan_height, step=step,
                                cores=cores, solve=solve)
         self.prefix = prefix
+        self.extract_only = extract_only
+        self.purge_history = purge_history
         self.main_design = None
         self.result = None
 
@@ -62,23 +73,54 @@ class CopyandGenerate(AnsysProcedure):
         if status != self.SUCCESS:
             return status
 
+        if self.extract_only:
+            if self.purge_history:
+                self.actions = [PurgeHistory(self.app, list(extraction.result.copies.values()))]
+                status = super().act()
+                session.refresh()
+                if status != self.SUCCESS:
+                    return status
+            record = replace(extraction.result,
+                             pin_counts={"VCC": self.pair.a.value, "GND": self.pair.b.value})
+            session.save()
+            CopyStore(self.app).save(record)
+            self.result = {"design": self.main_design, "group": record.group,
+                           "copies": record.copies,
+                           "requested VCC pin count": self.pair.a.value,
+                           "requested GND pin count": self.pair.b.value,
+                           "placement": "copied in place; requested pins recorded as metadata",
+                           "history purged": self.purge_history,
+                           "copy record": str(CopyStore(self.app).path)}
+            return self.SUCCESS
+
         try:
             design, group = switch_to_copy(session, extraction.result.group, self.main_design)
             copy = copy_chip(session, group, self.main_design)
-            bz = BzProcedure(self.app, copy.board, **self.bz_options)  # checks the setup exists
+            bz = BzProcedure(self.app, copy.board, **self.bz_options)
         except (AedtError, LookupError, ValueError) as e:
             # Not one of the steps: report this procedure as the failed one.
             self.failed, self.error = self, f"{type(e).__name__}: {e}"
             return self.FAILURE
 
-        self.actions = [SetTerminalPositions(self.app, copy, self.pair), CheckValidity(self.app), bz]
+        self.actions = [SetTerminalPositions(self.app, copy, self.pair)]
+        if self.purge_history:
+            self.actions.append(PurgeHistory(self.app, list(extraction.result.copies.values())))
+        self.actions += [CheckValidity(self.app), bz]
         status = super().act()
         session.refresh()
         if status != self.SUCCESS:
             return status
 
         session.save()
+        record = replace(extraction.result,
+                         pin_counts={"VCC": self.pair.a.value, "GND": self.pair.b.value},
+                         analysis_design=design)
+        CopyStore(self.app).save(record)
         self.result = {"design": design, "group": group,
                        "VCC pin count": copy.vcc.position_value, "GND pin count": copy.gnd.position_value,
-                       "VCC": str(self.pair.a), "GND": str(self.pair.b), **bz.result}
+                       "VCC": str(self.pair.a), "GND": str(self.pair.b),
+                       "sphere placement": "not explicitly moved; depends on project expressions",
+                       "history purged": self.purge_history,
+                       "copy record": str(CopyStore(self.app).path),
+                       **(bz.result if bz else {})}
         return self.SUCCESS
