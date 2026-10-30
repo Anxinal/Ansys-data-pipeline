@@ -12,7 +12,8 @@ from ansys.aedt.core.modules.material import MatProperties
 
 from Chips.Components import Boundary, Component, Material
 from Chips.DesignSnapshot import DesignSnapshot
-from configs import TYPE_GROUPS
+from configs import GRID_SIZE, TYPE_GROUPS
+from MFieldData.BoardImage import BoardImage, crop_to_content
 from PIL import Image
 from .utils import file_stem, safe
 
@@ -64,8 +65,25 @@ class DesignReader:
         groups = {group: tuple(oeditor.GetObjectsInGroup(group)) for group in self.group_names()}
         return DesignSnapshot(app.design_name, app.modeler.model_units, tuple(components), boundaries, groups)
     
-    def obtain_image_snapshot() -> Image:
-        pass
+    def obtain_image_snapshot(self, component: Component) -> BoardImage:
+        """A top-view picture of ``component`` from AEDT, cut so the component starts at pixel (0, 0).
+
+        Only the component is drawn (no axis, grid, ruler or region). The cells are
+        configs.GRID_SIZE pixels and the grid holds as many whole cells as fit.
+        AEDT draws model pictures only in graphical mode.
+        """
+        app = self.app
+        path = Path(app.working_directory) / f"{file_stem(app.design_name)}_{file_stem(component.name)}_top.jpg"
+        path.unlink(missing_ok=True)  # so an earlier picture is never read as this one
+        app.post.export_model_picture(path, show_axis=False, show_grid=False, show_ruler=False, show_region="False",
+                                      selections=[component.name], orientation="top")
+        if not path.is_file():
+            raise RuntimeError(f'AEDT exported no picture of "{component.name}"; it needs graphical mode')
+        with Image.open(path) as picture:
+            image = crop_to_content(picture)
+        width, height = GRID_SIZE
+        return BoardImage(image, (width, height), image.width // width - 1, image.height // height - 1,
+                          name=component.name)
 
     def _boundaries(self, object_faces):
         """Read live properties/assignments without parsing the saved project.
