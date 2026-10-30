@@ -60,7 +60,6 @@ class BzExport(AnsysAction):
         self.scan_height = scan_height
         self.step = step
         self.units = app.modeler.model_units
-        self.result = None
 
     @property
     def solution(self):

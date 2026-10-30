@@ -73,7 +73,6 @@ class ExtractCopy(AnsysAction):
         fixed = [name for name in positions if name.lower() not in self._movable_names()]
         if fixed:
             raise ValueError(f"Only the spheres and GND/VCC can be moved; {sorted(fixed)} keep their position")
-        self.result = None
 
     def movable_parts(self):
         """The parts that may move: the two spheres and the GND/VCC objects."""

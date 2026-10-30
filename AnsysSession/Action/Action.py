@@ -4,12 +4,17 @@ from ..DesignReader import DesignReader
 from ..ModelEditor import ModelEditor
 
 
+class ActionFailed(RuntimeError):
+    """An action (or a step of a procedure) returned a non-zero status from run()."""
+
+
 class AnsysAction(ABC):
     """One step performed within an app design. Switching design is done outside of this class,
     except by CopyAndGenerate and SwitchBackToMain, which hold the Session for it.
 
     Changes to the design go through ``self.editor`` (ModelEditor), reads through
-    ``self.reader`` (DesignReader).
+    ``self.reader`` (DesignReader). An action that produces something leaves it in
+    ``self.result``.
     """
 
     SUCCESS = 0
@@ -19,11 +24,18 @@ class AnsysAction(ABC):
         self.app = app
         self.label = label
         self.error = None  # what went wrong when act() returns a non-zero status
-        self.log = None
+        self.result = None  # what act() produced, if anything
 
     @abstractmethod
     def act(self) -> int:
         """Perform the action and return its exit status (SUCCESS, or non-zero on failure)."""
+
+    def run(self):
+        """act(), then ``self.result``; raises ActionFailed naming the failed step instead of returning a status."""
+        if self.act() != self.SUCCESS:
+            failed = getattr(self, "failed", None) or self
+            raise ActionFailed(f"{failed.label} failed: {self.error}")
+        return self.result
 
     @property
     def editor(self):
@@ -33,35 +45,6 @@ class AnsysAction(ABC):
     def reader(self):
         return DesignReader(self.app)
 
-    def get_attribute(self, attr):
-        """An attribute of the app, e.g. "design_name"."""
-        return getattr(self.app, attr)
-
-    def update_attribute(self, attr, value):
-        """Set an attribute of the app and return the value read back."""
-        setattr(self.app, attr, value)
-        return getattr(self.app, attr)
-
-    def get_attribute_recursive(self, path, obj=None):
-        """A nested attribute of the app, by its path, e.g. ["modeler", "model_units"]."""
-        obj = self.app if obj is None else obj
-        if not path:
-            return obj
-        if not hasattr(obj, path[0]):
-            raise AttributeError(f"{type(obj).__name__} has no attribute {path[0]!r}")
-        return self.get_attribute_recursive(path[1:], getattr(obj, path[0]))
-
-    def update_attribute_recursive(self, path, value):
-        """Set a nested attribute of the app by its path and return the value read back."""
-        if not path:
-            raise ValueError("update_attribute_recursive needs a non-empty path")
-        try:
-            parent = self.get_attribute_recursive(path[:-1])
-        except AttributeError as e:
-            raise AttributeError(f"Cannot reach {'.'.join(path)}: {e}") from None
-        setattr(parent, path[-1], value)
-        return getattr(parent, path[-1])
-
     def save_changes(self):
         """Save the project; returns SUCCESS or FAILURE."""
         try:
@@ -70,30 +53,6 @@ class AnsysAction(ABC):
             self.error = str(e)
             return self.FAILURE
         return self.SUCCESS
-
-    def print_log(self):
-        print(self.log)
-
-
-class AnsysReturnableAction(AnsysAction):
-
-    def __init__(self, app, label="actionx"):
-        super().__init__(app, label)
-        self.result = None
-        self.isexecuted = False
-
-    @abstractmethod
-    def act(self):
-        """return the result of action at the end"""
-        pass
-
-    def return_result(self):
-        """The action's result, running act() first if it hasn't run yet."""
-        if not self.isexecuted:
-            self.act()
-            self.isexecuted = True
-        return self.result
-
 
 
 class AnsysProcedure(AnsysAction):

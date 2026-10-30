@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 import numpy as np
 from PIL import Image
 
@@ -51,27 +53,31 @@ class BoardImage:
         """The name a label file uses for cell (x, y), e.g. "Board_3_5"."""
         return f"{self.name}_{x}_{y}"
     
-    def is_processed(self):
-        return self._pixel_size[0] == 0 and self._pixel_size[1] == 0
-
-    def _split_grid_on_coord(self, x, y):
-        """The cell at grid coordinates (x, y), cut out of the image, as a processed BoardImage named cell_name(x, y)."""
+    def cell(self, x, y):
+        """The cell at grid coordinates (x, y), cut out of the image, as a BoardCell named cell_name(x, y)."""
         if (x < 0 or x > self._max_x) or (y < 0 or y > self._max_y):
             raise ValueError(f"({x}, {y}) is outside the grid 0..{self._max_x} x 0..{self._max_y}")
         width, height = self._pixel_size
         left, top = x * width, y * height
-        image = self.image.crop((left, top, left + width, top + height))
-        return BoardImage(image, (0, 0), 0, 0, name=self.cell_name(x, y))
+        return BoardCell(self.cell_name(x, y), x, y, self.image.crop((left, top, left + width, top + height)))
 
     def split_all(self):
-        """Process the large snapshot image into simple snapshots"""
-        result = []
-        if self.is_processed():
-            raise ValueError("The image is already processed. It cannot be split further.")
-        for x in range(self._max_x + 1):
-            for y in range(self._max_y + 1):
-                result.append(self._split_grid_on_coord(x,y))
-        return result
+        """Every cell of the board as a BoardCell, row by row (the order of cell_coords())."""
+        return [self.cell(x, y) for x, y in self.cell_coords()]
+
+
+
+class BoardCell(BoardImage):
+    """One grid cell of a BoardImage: its label-file name, grid coordinates and pixels."""
+
+    name: str
+    x: int
+    y: int
+    image: Image.Image
+
+    def split_all(self):
+        raise ValueError("You cannot split a board cell")
+
 
 
                 

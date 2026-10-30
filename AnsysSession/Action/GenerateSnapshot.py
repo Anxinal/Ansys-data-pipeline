@@ -1,23 +1,23 @@
 from Chips.Components import Component
-from Chips.Positions import Position
 
-from ..ModelEditor import AedtError
 from .Action import AnsysAction
 
 
 class GenerateSnapshot(AnsysAction):
-    """Move ``component`` so its center lands on ``to_position`` (z=None keeps its height)."""
+    """Take a top-view picture of ``component`` (usually a board); ``result`` is its BoardImage.
 
-    def __init__(self, app, component: Component, to_position: Position):
-        super().__init__(app, "Move Component")
+    See DesignReader.obtain_image_snapshot: AEDT must run in graphical mode and
+    configs.GRID_SIZE must be set.
+    """
+
+    def __init__(self, app, component: Component):
+        super().__init__(app, "Generate_Snapshot")
         self.component = component
-        self.to_position = to_position
 
     def act(self) -> int:
-        """Move a component within the current design app"""
         try:
-            self.editor.move_to(self.component.name, self.to_position)
-        except AedtError as e:
-            self.error = f"{e} (target {self.to_position})"
+            self.result = self.reader.obtain_image_snapshot(self.component)
+        except (RuntimeError, ValueError) as e:
+            self.error = f'{e} (component "{self.component.name}")'
             return self.FAILURE
         return self.SUCCESS

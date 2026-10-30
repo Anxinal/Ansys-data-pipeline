@@ -13,7 +13,7 @@ from ansys.aedt.core.modules.material import MatProperties
 from Chips.Components import Boundary, Component, Material
 from Chips.DesignSnapshot import DesignSnapshot
 from configs import GRID_SIZE, TYPE_GROUPS
-from MFieldData.BoardImage import BoardImage, crop_to_content
+from ImageData.BoardImage import BoardImage, crop_to_content
 from PIL import Image
 from .utils import file_stem, safe
 
@@ -72,6 +72,8 @@ class DesignReader:
         configs.GRID_SIZE pixels and the grid holds as many whole cells as fit.
         AEDT draws model pictures only in graphical mode.
         """
+        if len(GRID_SIZE) != 2:
+            raise ValueError(f"configs.GRID_SIZE must be [width, height] in pixels, not {GRID_SIZE}")
         app = self.app
         path = Path(app.working_directory) / f"{file_stem(app.design_name)}_{file_stem(component.name)}_top.jpg"
         path.unlink(missing_ok=True)  # so an earlier picture is never read as this one

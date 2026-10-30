@@ -58,5 +58,5 @@ EXPORT_DATA_FOLDER = "/data"
 GRID_SIZE = []
 
 # How far (0-255, per colour channel) a pixel of an AEDT model picture may differ from the
-# background and still count as background (MFieldData/BoardImage.py's crop_to_content).
+# background and still count as background (ImageData/BoardImage.py's crop_to_content).
 BACKGROUND_TOLERANCE = 30

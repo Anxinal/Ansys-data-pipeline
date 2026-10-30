@@ -108,8 +108,6 @@ def run_bz_procedure(session, board, setup=DEFAULT_SETUP, output_dir=DEFAULT_OUT
 
     Returns the export summary.
     """
-    procedure = BzProcedure(session.app, board, setup, output_dir, scan_height, step, cores, solve)
-    if procedure.act() != procedure.SUCCESS:
-        raise RuntimeError(f"{procedure.failed.label} failed: {procedure.error}")
+    result = BzProcedure(session.app, board, setup, output_dir, scan_height, step, cores, solve).run()
     session.save()
-    return procedure.result
+    return result

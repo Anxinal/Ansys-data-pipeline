@@ -89,10 +89,7 @@ def run_sections(session, args):
                               scan_height=args.scan_height, step=args.step, cores=args.cores,
                               solve=not args.no_solve, extract_only=args.extract_only,
                               purge_history=args.purge_history)
-        if job.act() != job.SUCCESS:
-            label = job.failed.label if job.failed else job.label
-            raise RuntimeError(f"{label} failed: {job.error}")
-        results.append(job.result)
+        results.append(job.run())
     return results
 
 
@@ -123,21 +120,17 @@ def main(argv=None):
             chip.print()
         if args.extract:
             positions = chip.extraction_positions(step=args.step, sampler=PositionSampler())
-            extraction = ExtractCopy(s.app, snapshot, chip, positions)
-            if extraction.act() != extraction.SUCCESS:
-                raise RuntimeError(f"extract failed: {extraction.error}")
+            record = ExtractCopy(s.app, snapshot, chip, positions).run()
             s.refresh()
-            group = extraction.result.group
-            print(f"\nExtracted {group}: {list(extraction.result.copies.values())}")
+            group = record.group
+            print(f"\nExtracted {group}: {list(record.copies.values())}")
             if args.purge_history:
                 from AnsysSession.Action.PurgeHistory import PurgeHistory
-                purge = PurgeHistory(s.app, list(extraction.result.copies.values()))
-                if purge.act() != purge.SUCCESS:
-                    raise RuntimeError(f"purge history failed: {purge.error}")
+                PurgeHistory(s.app, list(record.copies.values())).run()
                 s.refresh()
             if args.extract_only:
                 s.save()
-                result = {"design": s.design, "group": group, "copies": extraction.result.copies,
+                result = {"design": s.design, "group": group, "copies": record.copies,
                           "history purged": args.purge_history}
                 print_info(result)
                 return result

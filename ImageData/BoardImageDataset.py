@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from .BoardImage import BoardImage
+from .BoardImage import BoardCell, BoardImage
 
 
 def read_label_names(path):
@@ -18,16 +18,17 @@ def read_label_names(path):
 class BoardImageDataset(Dataset):
     """Every grid cell of ``boards`` as one sample: (image [3, H, W] float32 in 0..1, label 1.0 or 0.0).
 
-    ``boards`` may mix whole boards, which are split into their cells (split_all), and
-    cells already split. ``positives`` names the cells VCC/GND can attach to, as a
+    ``boards`` may mix whole BoardImages, which are split into their cells (split_all),
+    and BoardCells already split. ``positives`` names the cells VCC/GND can attach to, as a
     label.txt path or a list of names; every other cell is negative. A cell's name is
     BoardImage.cell_name(x, y), e.g. "Board_3_5". ``transform``, if given, is applied
     to each image tensor.
     """
 
-    def __init__(self, boards: list[BoardImage], positives, transform=None):
+    def __init__(self, boards: list[BoardImage | BoardCell], positives, transform=None):
         positives = read_label_names(positives) if isinstance(positives, (str, Path)) else set(positives)
-        self.cells = [cell for board in boards for cell in ([board] if board.is_processed() else board.split_all())]
+        self.cells = [cell for board in boards
+                      for cell in ([board] if isinstance(board, BoardCell) else board.split_all())]
         names = [cell.name for cell in self.cells]
         if len(set(names)) != len(names):
             raise ValueError("Two boards share a name, so their cells can't be told apart")
