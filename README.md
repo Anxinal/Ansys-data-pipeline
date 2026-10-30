@@ -13,7 +13,7 @@ Two layers with a one-way dependency: the AEDT layer reads and writes the design
 layer is plain data and logic and never talks to AEDT.
 
 ```
-main.py                    command line; wires everything together
+main.py                    runs what configs.py's "Run" section says; wires everything together
 AnsysSession/              AEDT layer (the only code that imports PyAEDT)
   Session.py               open/close AEDT, active design, snapshot, save
   DesignReader.py          reads the design in bulk into a DesignSnapshot
@@ -54,31 +54,33 @@ Run the tests (no AEDT needed): `python -m unittest discover tests`
 
 ## Tutorial: automatic Bz analysis
 
-### From the command line
+### From main.py
 
-```
-python main.py path/to/chip.aedt --cores 8                  # solve and export Bz above the board
-python main.py path/to/chip.aedt --no-solve                 # reuse the existing solution
-python main.py path/to/chip.aedt --extract                  # new copy BOARD_<n>, then analyse it
-python main.py path/to/chip.aedt --copy BOARD_1             # analyse an existing copy
-python main.py path/to/chip.aedt --desktop --sections to_test.txt --extract-only --design Maxwell3DDesign3
+`python main.py` takes no options: set everything in the "Run" section of `configs.py`, then run it.
+
+```python
+DEFAULT_INPUT_PATH = "path/to/chip.aedt"
+RUN_MODE = "analyse"    # solve and export Bz above the board (CORES = 8, SOLVE = False to reuse the solution)
+RUN_MODE = "extract"    # new copy BOARD_<n>, then analyse it
+RUN_MODE = "copy"       # analyse an existing copy: COPY_GROUP = "BOARD_1"
+RUN_MODE = "sections"   # SECTIONS_FILE = "to_test.txt", EXTRACT_ONLY = True, SHOW_DESKTOP = True, DESIGN = "Maxwell3DDesign3"
 ```
 
-`--desktop` opens the AEDT GUI. `--sections` accepts the CSV format below or one instruction per line:
+The settings are checked before AEDT starts. `SHOW_DESKTOP` opens the AEDT GUI. `SECTIONS_FILE` accepts the CSV format below or one instruction per line:
 
 ```text
 board = L4L3_Separate87 Sphere_positions = 399 258
 ```
 
 The first pin is VCC, the second GND. Board names must match the project exactly.
-All instructions are checked before copying. `--extract-only` copies just the selected sheet,
+All instructions are checked before copying. `EXTRACT_ONLY` copies just the selected sheet,
 two spheres and two terminals into a group in the existing design, then saves the project and
 `copies.json` (including the requested pins as metadata). It does not create another design or
 change the source design's global pin variables. Geometry is copied in place; this mode does
 not implement sphere or terminal repositioning. It skips validation, solving, and field export.
-With `--desktop`, the desktop and project remain open for inspection after Python releases its session.
+With `SHOW_DESKTOP`, the desktop and project remain open for inspection after Python releases its session.
 
-For slow runs, append `--purge-history` to `--sections` or `--extract`. This runs the
+For slow runs, set `PURGE_HISTORY = True` with RUN_MODE "sections" or "extract". This runs the
 `PurgeHistory` action only on the new copies, before saving (and after terminal placement
 when generating Bz). Purging freezes their current geometry and removes editable history,
 including expression-driven placement, so it is disabled by default. The source objects'
@@ -93,8 +95,8 @@ its internal `AedtAPI` connection metadata is stored locally so activation of a 
 pasted design does not trigger a remote `GetPropNames` lookup. Actual AEDT property
 writes retain their normal behavior, and the guard is removed after each operation.
 
-Use `--gnd`, `--vcc`, `--spheres`, `--board` when the automatic part detection doesn't match
-your model, and `--help` for the rest. Results go to `data_export_default/` (`configs.DEFAULT_OUTPUT_DIR`):
+Set `DEFAULT_GND`, `DEFAULT_VCC`, `DEFAULT_SPEHRE` and `BOARD` in `configs.py` when the automatic part detection
+doesn't match your model. Results go to `data_export_default/` (`configs.DEFAULT_OUTPUT_DIR`):
 `<project>_<design>_<setup>_Bz.fld` (raw AEDT export) and `.npz` (`x`, `y`, `bz[ny, nx]` in tesla).
 
 ### From Python, in an opened session

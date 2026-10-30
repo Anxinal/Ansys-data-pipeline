@@ -1,36 +1,50 @@
-"""CLI checks and isolated workflow tests; no AEDT installation is required."""
-import contextlib
-import io
+"""Settings checks and isolated workflow tests; no AEDT installation is required."""
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import types
 import unittest
 
-from main import parse_args
+import configs
+from main import bz_options, check_settings
+
+
+def settings(**changes):
+    """configs.py's settings with ``changes`` applied, without touching the module."""
+    values = {name: getattr(configs, name) for name in dir(configs) if name.isupper()}
+    return types.SimpleNamespace(**{**values, **changes})
 
 
 class CliTests(unittest.TestCase):
-    def test_desktop_and_section_options(self):
+    def test_valid_settings_pass(self):
         with tempfile.TemporaryDirectory() as folder:
             project = Path(folder) / "test.aedt"
             sections = Path(folder) / "sections.txt"
             project.touch()
             sections.write_text("board = B Sphere_positions = 399 258")
-            args = parse_args([str(project), "--desktop", "--sections", str(sections), "--extract-only", "--purge-history"])
-            self.assertTrue(args.desktop and args.extract_only and args.purge_history)
-            self.assertEqual(args.sections, sections)
-            self.assertFalse(parse_args([str(project), "--extract"]).purge_history)
+            check_settings(settings(DEFAULT_INPUT_PATH=str(project), RUN_MODE="sections", SECTIONS_FILE=str(sections),
+                                    EXTRACT_ONLY=True, PURGE_HISTORY=True, SHOW_DESKTOP=True))
+            check_settings(settings(DEFAULT_INPUT_PATH=str(project), RUN_MODE="copy", COPY_GROUP="BOARD_1"))
+            check_settings(settings(DEFAULT_INPUT_PATH=str(project), RUN_MODE="analyse"))
 
-    def test_invalid_options_fail_before_loading_aedt(self):
+    def test_invalid_settings_fail_before_loading_aedt(self):
         with tempfile.NamedTemporaryFile(suffix=".aedt") as project:
-            for argv in ([project.name, "--extract-only"],
-                         [project.name, "--purge-history"],
-                         [project.name, "--extract", "--sections", "test.txt"],
-                         [str(Path(project.name).with_suffix(".missing"))]):
-                with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as error:
-                    parse_args(argv)
-                self.assertEqual(error.exception.code, 2)
+            for changes in (dict(RUN_MODE="analyse", EXTRACT_ONLY=True),
+                            dict(RUN_MODE="copy", COPY_GROUP="BOARD_1", PURGE_HISTORY=True),
+                            dict(RUN_MODE="sections", SECTIONS_FILE="test.txt"),
+                            dict(RUN_MODE="copy", COPY_GROUP=""),
+                            dict(RUN_MODE="Extract"),
+                            dict(DEFAULT_INPUT_PATH=str(Path(project.name).with_suffix(".missing"))),
+                            dict(DEFAULT_INPUT_PATH="")):
+                base = dict(DEFAULT_INPUT_PATH=project.name, EXTRACT_ONLY=False, PURGE_HISTORY=False)
+                with self.subTest(**changes), self.assertRaises(ValueError):
+                    check_settings(settings(**{**base, **changes}))
+
+    def test_bz_options_come_from_the_settings(self):
+        options = bz_options(settings(CORES=8, SOLVE=False, DEFAULT_SETUP="Setup2"))
+        self.assertEqual((options["cores"], options["solve"], options["setup"]), (8, False, "Setup2"))
+        self.assertEqual(options["step"], configs.DEFAULT_GRID_STEP)
 
     def test_extract_only_records_pins_without_duplicating_design_or_moving_originals(self):
         # Use a fresh interpreter so AEDT module substitutes cannot affect other tests.

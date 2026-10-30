@@ -1,5 +1,3 @@
-from dataclasses import dataclass
-
 import numpy as np
 from PIL import Image
 
@@ -45,6 +43,10 @@ class BoardImage:
     def get_pixel_size(self):
         return self._pixel_size
 
+    def is_processed(self):
+        """True for a BoardCell, already split out of its board; False for a whole board."""
+        return False
+
     def cell_coords(self):
         """Grid coordinates (x, y) of every cell, row by row."""
         return [(x, y) for y in range(self._max_y + 1) for x in range(self._max_x + 1)]
@@ -68,12 +70,18 @@ class BoardImage:
 
 
 class BoardCell(BoardImage):
-    """One grid cell of a BoardImage: its label-file name, grid coordinates and pixels."""
+    """One grid cell of a BoardImage: its label-file name, grid coordinates (x, y) on its board and pixels.
 
-    name: str
-    x: int
-    y: int
-    image: Image.Image
+    A BoardImage of a single cell the size of the whole image; it can't be split further.
+    """
+
+    def __init__(self, name, x, y, image: Image.Image):
+        super().__init__(image, image.size, 0, 0, name=name)
+        self.x = x
+        self.y = y
+
+    def is_processed(self):
+        return True
 
     def split_all(self):
         raise ValueError("You cannot split a board cell")

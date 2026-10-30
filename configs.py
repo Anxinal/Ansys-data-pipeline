@@ -2,12 +2,31 @@
 
 from pathlib import Path
 
-# --- Bz analysis (Analysis.py); main.py's options override these per run ---
+# --- Run (main.py takes no command-line options; edit these instead) ---
+DEFAULT_INPUT_PATH = "E:/An Xiao/data/L4321_M16.aedt"  # the .aedt project to open
+DESIGN = None  # design to open; None for the project's active design
+SHOW_INFO = False  # also print everything the project can tell about itself
+SHOW_DESKTOP = False  # show the AEDT desktop, and leave it and the project open afterwards
+# What main.py does:
+#   "analyse"   solve the design and export Bz above its board
+#   "extract"   copy the board, spheres and GND/VCC into a new group (DEFAULT_PREFIX<n>), then analyse that copy
+#   "copy"      analyse the existing copy COPY_GROUP
+#   "sections"  extract every section listed in SECTIONS_FILE (CSV or "board = ... Sphere_positions = ..." lines)
+RUN_MODE = "analyse"
+COPY_GROUP = ""  # for "copy", e.g. "BOARD_1"
+SECTIONS_FILE = ""  # for "sections"
+EXTRACT_ONLY = False  # "extract"/"sections": save the copies without validation, solving or field export
+PURGE_HISTORY = False  # "extract"/"sections": purge the new copies' modeling history; freezes their geometry
+REBUILD = False  # "copy"/"extract": recreate the copy's analysis design if it exists
+BOARD = None  # the board to analyse; needed when the design has several
+CORES = None  # cores for the solve; None for AEDT's default
+SOLVE = True  # False reuses the setup's existing solution
+
+# --- Bz analysis (Analysis.py) ---
 DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parent / "Result" / "Bz"
 DEFAULT_SETUP = "Setup1"
 DEFAULT_SCAN_HEIGHT = 0.060  # image plane height above the board's top face
 DEFAULT_GRID_STEP = 0.030  # image pixel size; also the Position grid step
-DEFAULT_INPUT_PATH = "E:/An Xiao/data/L4321_M16.aedt"
 # Fields-calculator named expression for the smoothed z-component of B;
 # BzAnalysis creates it in the project when it is missing.
 BZ_EXPRESSION = "smoothscalBz"
@@ -17,8 +36,7 @@ BZ_EXPRESSION = "smoothscalBz"
 NAMED_EXPRESSIONS = (BZ_EXPRESSION,)
 
 # --- Chip model (Chips/) ---
-# Default names of the GND and VCC components or excitations and of the two
-# connection spheres (main.py's --gnd/--vcc/--spheres).
+# Names of the GND and VCC components or excitations and of the two connection spheres.
 DEFAULT_GND = "GND"
 DEFAULT_VCC = "VCC"
 DEFAULT_SPEHRE = ["Sphere_GND", "Sphere_VCC"]

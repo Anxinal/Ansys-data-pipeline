@@ -27,8 +27,7 @@ class BoardImageDataset(Dataset):
 
     def __init__(self, boards: list[BoardImage | BoardCell], positives, transform=None):
         positives = read_label_names(positives) if isinstance(positives, (str, Path)) else set(positives)
-        self.cells = [cell for board in boards
-                      for cell in ([board] if isinstance(board, BoardCell) else board.split_all())]
+        self.cells = [cell for board in boards for cell in ([board] if board.is_processed() else board.split_all())]
         names = [cell.name for cell in self.cells]
         if len(set(names)) != len(names):
             raise ValueError("Two boards share a name, so their cells can't be told apart")

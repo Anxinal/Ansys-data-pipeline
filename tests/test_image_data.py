@@ -24,7 +24,10 @@ class BoardImageTests(unittest.TestCase):
         self.assertEqual([(c.x, c.y) for c in cells[:7]], [(0, 0), (1, 0), (2, 0), (3, 0), (4, 0), (5, 0), (0, 1)])
         cell = image.cell(2, 1)
         self.assertIsInstance(cell, BoardCell)
-        self.assertEqual(cell.name, "Board_2_1")
+        self.assertEqual((cell.name, cell.x, cell.y), ("Board_2_1", 2, 1))
+        self.assertEqual((image.is_processed(), cell.is_processed()), (False, True))
+        with self.assertRaises(ValueError):
+            cell.split_all()
         np.testing.assert_array_equal(np.asarray(cell.image), np.asarray(image.image)[10:20, 20:30])
 
     def test_cell_outside_the_grid_is_rejected(self):
