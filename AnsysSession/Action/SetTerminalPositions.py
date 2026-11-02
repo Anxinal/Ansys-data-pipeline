@@ -16,17 +16,16 @@ class SetTerminalPositions(AnsysAction):
     moved and its position value is left unset.
     """
 
-    def __init__(self, app, section: ChipSection, pair: TerminalPositionPair):
-        super().__init__(app, "Set_Terminal_Positions")
+    def __init__(self, session, section: ChipSection, pair: TerminalPositionPair):
+        super().__init__(session, "Set_Terminal_Positions")
         self.section = section
         self.pair = pair
 
     def act(self):
-        editor = self.editor
         for terminal, position in ((self.section.vcc, self.pair.a), (self.section.gnd, self.pair.b)):
             terminal.place_at(position)
             try:
-                editor.set_pin_count(PIN_COUNT_VARIABLES[terminal.label], terminal.position_value)
+                self.session.set_pin_count(PIN_COUNT_VARIABLES[terminal.label], terminal.position_value)
             except AedtError as e:
                 self.error = f"{e} ({terminal.label} at {position})"
                 return self.FAILURE

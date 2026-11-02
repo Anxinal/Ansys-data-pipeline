@@ -20,8 +20,9 @@ class ProjectReport:
     """Report of an open Session: session, project, design, variables, geometry,
     components, materials, boundaries, mesh, setups, optimetrics and post."""
 
-    def __init__(self, session):
+    def __init__(self, session, app):
         self.session = session
+        self.app = app
 
     def show(self, attr=None):
         """Print and return every section, or only ``attr``."""
@@ -58,10 +59,10 @@ class ProjectReport:
         return info[attr] if attr else info
 
     def _session_section(self):
-        return {**dict(self.session.app.info), "install folder": self.session.app.desktop_install_dir}
+        return {**dict(self.app.info), "install folder": self.app.desktop_install_dir}
 
     def _project_section(self):
-        app = self.session.app
+        app = self.app
         project_file = Path(app.project_file)
         designs = {}
         for name in app.design_list:
@@ -81,7 +82,7 @@ class ProjectReport:
         }
 
     def _design_section(self):
-        app = self.session.app
+        app = self.app
         return {
             "name": app.design_name,
             "design type": app.design_type,
@@ -105,11 +106,11 @@ class ProjectReport:
                 for name, var in variables.items()
             }
 
-        manager = self.session.app.variable_manager
+        manager = self.app.variable_manager
         return {"project": describe(manager.project_variables), "design": describe(manager.design_variables)}
 
     def _geometry_section(self):
-        modeler = self.session.app.modeler
+        modeler = self.app.modeler
         return {
             "units": modeler.model_units,
             "solids / sheets / lines": f"{len(modeler.solid_objects)} / {len(modeler.sheet_objects)} / {len(modeler.line_objects)}",
@@ -122,17 +123,16 @@ class ProjectReport:
         }
 
     def _components_section(self):
-        reader = self.session.reader
-        return {c.name: {**c.info(), **reader.details(c)} for c in self.session.components}
+        return {c.name: {**c.info(), **self.session.details(c)} for c in self.session.components}
 
     def _materials_section(self):
         return {material.name: material.info() for material in self.session.materials}
 
     def _boundaries_section(self):
-        return {b.name: {"type": b.type, **b.props} for b in self.session.app.boundaries}
+        return {b.name: {"type": b.type, **b.props} for b in self.app.boundaries}
 
     def _mesh_section(self):
-        mesh = self.session.app.mesh
+        mesh = self.app.mesh
         initial = mesh.initial_mesh_settings
         return {
             "initial settings": dict(initial.props) if initial else {},
@@ -140,7 +140,7 @@ class ProjectReport:
         }
 
     def _setups_section(self):
-        app = self.session.app
+        app = self.app
         solved_variations = {}
         for solution in app.existing_analysis_sweeps:
             setup_name, sweep_name = (part.strip() for part in solution.split(":", 1))
@@ -152,14 +152,14 @@ class ProjectReport:
         }
 
     def _optimetrics_section(self):
-        app = self.session.app
+        app = self.app
         return {
             "parametric": {s.name: dict(s.props) for s in app.parametrics.setups},
             "optimization": {s.name: dict(s.props) for s in app.optimizations.setups},
         }
 
     def _post_section(self):
-        app = self.session.app
+        app = self.app
         return {
             "reports": {r.plot_name: {"type": r.report_type, "solution": r.setup} for r in app.post.plots},
             "field plots": safe(lambda: list(app.post.field_plot_names)),

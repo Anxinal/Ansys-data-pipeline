@@ -7,21 +7,15 @@ NEW_X = "(mod(PinCountGND,yballcount)-1)*xballshift"
 
 
 class CorrectGroundOffset(AnsysAction):
-    def __init__(self, app):
-        super().__init__(app, "Correct_GND_Offset")
+    def __init__(self, session):
+        super().__init__(session, "Correct_GND_Offset")
 
     def act(self):
-        native, plans = self.app.modeler.oeditor, []
+        plans = []
         names = [DEFAULT_GND, next(s for s in DEFAULT_SPEHRE if "gnd" in s.lower())]
         for name in names:
-            history = native.GetChildObject(name)
-            matches = []
-            for operation in history.GetChildNames():
-                node = history.GetChildObject(operation)
-                if str(operation).startswith("Move:"):
-                    vector = [str(node.GetPropValue(f"Move Vector/{a}")) for a in "XYZ"]
-                    if "PinCountGND" in vector[0]:
-                        matches.append((name, str(operation), vector))
+            matches = [(name, operation, vector) for operation, vector in self.session.move_operations(name)
+                       if "PinCountGND" in vector[0]]
             if len(matches) != 1 or matches[0][2][0] not in (OLD_X, NEW_X):
                 raise ValueError(f"Unexpected GND movement on {name}; no offset edit applied")
             plans.extend(matches)
@@ -29,10 +23,10 @@ class CorrectGroundOffset(AnsysAction):
         try:
             for name, operation, vector in plans:
                 changed.append((name, operation, vector))
-                self.editor.set_move_vector(name, operation, [NEW_X, *vector[1:]])
+                self.session.set_move_vector(name, operation, [NEW_X, *vector[1:]])
         except Exception:
             for name, operation, vector in reversed(changed):
-                self.editor.set_move_vector(name, operation, vector)
+                self.session.set_move_vector(name, operation, vector)
             raise
         self.result = {"objects": names, "x_expression": NEW_X,
                        "before": plans, "row_expression_changed": False}

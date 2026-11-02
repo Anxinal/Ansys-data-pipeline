@@ -9,16 +9,14 @@ above the chip board and exported to the output folder:
 Coordinates are in the design's model units; Bz is in tesla.
 """
 
-import re
 from pathlib import Path
 
 import numpy as np
 
 from configs import BZ_EXPRESSION, DEFAULT_GRID_STEP, DEFAULT_OUTPUT_DIR, DEFAULT_SCAN_HEIGHT, DEFAULT_SETUP
 
-from ..utils import file_stem
-from .Action import AnsysAction
-from .Analysis import solution_name
+from ...utils import file_stem
+from ..Action import AnsysAction
 
 
 def load_bz_image(fld_path):
@@ -51,22 +49,22 @@ def load_bz_image(fld_path):
 class BzExport(AnsysAction):
     """Export the Bz image above ``board`` (a Component); the summary ends up in ``self.result``."""
 
-    def __init__(self, app, board, setup=DEFAULT_SETUP, output_dir=DEFAULT_OUTPUT_DIR,
+    def __init__(self, session, board, setup=DEFAULT_SETUP, output_dir=DEFAULT_OUTPUT_DIR,
                  scan_height=DEFAULT_SCAN_HEIGHT, step=DEFAULT_GRID_STEP, label="export"):
-        super().__init__(app, label)
+        super().__init__(session, label)
         self.board = board
         self.setup = setup
         self.output_dir = Path(output_dir).expanduser().resolve()
         self.scan_height = scan_height
         self.step = step
-        self.units = app.modeler.model_units
+        self.units = session.units
 
     @property
     def solution(self):
-        return solution_name(self.app, self.setup)
+        return self.session.solution_name(self.setup)
 
     def act(self):
-        self.ensure_bz_expression()
+        self.session.ensure_bz_expression()
         start, stop, grid_step = self.image_plane()
         fld_path = self.export_bz(start, stop, grid_step)
         if fld_path is None:
@@ -90,18 +88,6 @@ class BzExport(AnsysAction):
         }
         return self.SUCCESS
 
-    def ensure_bz_expression(self):
-        """Create the smoothed-Bz named expression if the project doesn't have it yet."""
-        reporter = self.app.ofieldsreporter
-        if reporter.DoesNamedExpressionExists(BZ_EXPRESSION):
-            return
-        reporter.CalcStack("clear")
-        reporter.EnterQty("B")
-        reporter.CalcOp("ScalarZ")
-        reporter.CalcOp("Smooth")
-        reporter.AddNamedExpression(BZ_EXPRESSION, "Fields")
-        reporter.CalcStack("clear")
-
     def image_plane(self):
         """(start, stop, step) of a grid over the board's XY extent, scan_height above its top."""
         xmin, ymin, _, xmax, ymax, zmax = self.board.bounding_box
@@ -110,36 +96,12 @@ class BzExport(AnsysAction):
 
     def export_bz(self, start, stop, step):
         """Export Bz on the grid to a .fld file; its path, or None (with self.error) on failure."""
-        app = self.app
+        session = self.session
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        fld_path = self.output_dir / f"{file_stem(app.project_name)}_{file_stem(app.design_name)}_{file_stem(self.setup)}_Bz.fld"
+        fld_path = self.output_dir / f"{file_stem(session.project_name)}_{file_stem(session.design)}_{file_stem(self.setup)}_Bz.fld"
         fld_path.unlink(missing_ok=True)  # don't mistake a previous run's file for this run's output
 
-        # Export at the design's current variable values.
-        variation = []
-        for name, variable in app.variable_manager.independent_design_variables.items():
-            variation += [f"{name}:=", [variable.expression]]
-        export_options = ["NAME:ExportOption", "IncludePtInOutput:=", True, "RefCSName:=", "Global",
-                          "PtInSI:=", False, "FieldInRefCS:=", True]
-
-        reporter = app.ofieldsreporter
-        reporter.CalcStack("clear")
-        try:
-            reporter.CopyNamedExprToStack(BZ_EXPRESSION)
-            reporter.ExportOnGrid(
-                str(fld_path),
-                [f"{value}{self.units}" for value in start],
-                [f"{value}{self.units}" for value in stop],
-                [f"{value}{self.units}" for value in step],
-                self.solution,
-                variation,
-                export_options,
-                "Cartesian",
-                [f"0{self.units}"] * 3,
-                False,
-            )
-        finally:
-            reporter.CalcStack("clear")
+        session.export_field_on_grid(BZ_EXPRESSION, fld_path, start, stop, step, self.solution)
         if not fld_path.is_file() or fld_path.stat().st_size < 100:
             self.error = f"AEDT did not write the Bz export {fld_path}"
             return None

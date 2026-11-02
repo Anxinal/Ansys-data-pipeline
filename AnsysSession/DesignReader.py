@@ -1,5 +1,7 @@
 """Reads a design from AEDT into plain data: the only place the chip layer's inputs come from.
 
+Only Session holds a DesignReader; everything else reads through the Session.
+
 snapshot() reads every object once, in bulk where AEDT allows it (types,
 materials and model flags take one call per group or material, not per object),
 so the chip layer never calls AEDT. details() and material() read the extras a
@@ -31,6 +33,64 @@ class DesignReader:
 
     def object_names(self):
         return list(self.app.modeler.object_names)
+
+    def model_objects(self):
+        """(every object's name, the names of the objects taking part in the model), without reading geometry."""
+        names = {str(name) for group in TYPE_GROUPS for name in self.oeditor.GetObjectsInGroup(group)}
+        return names, names - set(self.oeditor.GetObjectsInGroup("Non Model"))
+
+    def objects_with_materials(self, materials):
+        """Names of the objects made of any of ``materials``."""
+        return {str(name) for material in materials for name in self.oeditor.GetObjectsByMaterial(material)}
+
+    def variable_value(self, name):
+        """The live value of a design variable, as AEDT shows it."""
+        return str(self.app.odesign.GetVariableValue(name))
+
+    def move_operations(self, name):
+        """[(operation, [x, y, z expressions])] of the Move operations in an object's history."""
+        history = self.oeditor.GetChildObject(name)
+        moves = []
+        for operation in history.GetChildNames():
+            if str(operation).startswith("Move:"):
+                node = history.GetChildObject(operation)
+                moves.append((str(operation), [str(node.GetPropValue(f"Move Vector/{axis}")) for axis in "XYZ"]))
+        return moves
+
+    def solution_name(self, setup):
+        """The setup's solution, e.g. "Setup1 : LastAdaptive"."""
+        for solution in self.app.existing_analysis_sweeps:
+            if solution.split(":")[0].strip() == setup:
+                return solution
+        return f"{setup} : LastAdaptive"
+
+    def export_field_on_grid(self, expression, path, start, stop, step, solution):
+        """Write a named field expression, on a grid in model units, to ``path`` at the current variable values."""
+        app, units = self.app, self.app.modeler.model_units
+        variation = []
+        for name, variable in app.variable_manager.independent_design_variables.items():
+            variation += [f"{name}:=", [variable.expression]]
+        export_options = ["NAME:ExportOption", "IncludePtInOutput:=", True, "RefCSName:=", "Global",
+                          "PtInSI:=", False, "FieldInRefCS:=", True]
+
+        reporter = app.ofieldsreporter
+        reporter.CalcStack("clear")
+        try:
+            reporter.CopyNamedExprToStack(expression)
+            reporter.ExportOnGrid(
+                str(path),
+                [f"{value}{units}" for value in start],
+                [f"{value}{units}" for value in stop],
+                [f"{value}{units}" for value in step],
+                solution,
+                variation,
+                export_options,
+                "Cartesian",
+                [f"0{units}"] * 3,
+                False,
+            )
+        finally:
+            reporter.CalcStack("clear")
 
     def selected_components(self, names):
         """Read geometry only for explicit source parts, without a full snapshot."""

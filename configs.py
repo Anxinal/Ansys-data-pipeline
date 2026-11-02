@@ -9,20 +9,14 @@ SHOW_INFO = False  # also print everything the project can tell about itself
 SHOW_DESKTOP = False  # show the AEDT desktop, and leave it and the project open afterwards
 # What main.py does:
 #   "analyse"   solve the design and export Bz above its board
-#   "extract"   copy the board, spheres and GND/VCC into a new group (DEFAULT_PREFIX<n>), then analyse that copy
-#   "copy"      analyse the existing copy COPY_GROUP
-#   "sections"  extract every section listed in SECTIONS_FILE (CSV or "board = ... Sphere_positions = ..." lines)
+#   "sections"  solve every section listed in SECTIONS_FILE in place (CSV or "board = ... Sphere_positions = ..." lines)
 RUN_MODE = "analyse"
-COPY_GROUP = ""  # for "copy", e.g. "BOARD_1"
 SECTIONS_FILE = ""  # for "sections"
-EXTRACT_ONLY = False  # "extract"/"sections": save the copies without validation, solving or field export
-PURGE_HISTORY = False  # "extract"/"sections": purge the new copies' modeling history; freezes their geometry
-REBUILD = False  # "copy"/"extract": recreate the copy's analysis design if it exists
 BOARD = None  # the board to analyse; needed when the design has several
 CORES = None  # cores for the solve; None for AEDT's default
 SOLVE = True  # False reuses the setup's existing solution
 
-# --- Bz analysis (Analysis.py) ---
+# --- Bz analysis (Action/AnalysisActions/) ---
 DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parent / "Result" / "Bz"
 DEFAULT_SETUP = "Setup1"
 DEFAULT_SCAN_HEIGHT = 0.060  # image plane height above the board's top face
@@ -63,9 +57,7 @@ MAX_COLUMN = 20
 # (Position.num). The terminal and its sphere follow them through the design's expressions.
 PIN_COUNT_VARIABLES = {"VCC": "PinCount", "GND": "PinCountGND"}
 
-# --- Extraction (Extract.py) ---
-DEFAULT_PREFIX = "BOARD_"  # copies go to groups BOARD_1, BOARD_2, ...
-
+# --- Geometry (ModelEditor.py) ---
 # Duplication needs a non-zero vector; parts that stay in place are duplicated
 # this far along x and moved straight back.
 IN_PLACE_OFFSET = [1.0, 0.0, 0.0]

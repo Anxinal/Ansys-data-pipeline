@@ -1,11 +1,11 @@
-"""Every change to an AEDT design goes through ModelEditor.
+"""Every change to an AEDT design goes through ModelEditor, which only Session holds.
 
 Operations raise AedtError when AEDT refuses them. They change AEDT straight
 away; snapshots read before a change are out of date afterwards (re-read with
 Session.refresh()). Nothing is saved until save() is called.
 """
 
-from configs import IN_PLACE_OFFSET
+from configs import BZ_EXPRESSION, IN_PLACE_OFFSET
 from .GrpcCompatibility import local_grpc_metadata
 
 
@@ -226,6 +226,23 @@ class ModelEditor:
                 raise KeyError(f"{key!r} is not an editable property of {kind}")
             setattr(target, key, value)
         return {key: getattr(target, key) for key in changes}
+
+    # --- analysis ---------------------------------------------------------
+    def ensure_bz_expression(self):
+        """Create the smoothed-Bz named expression if the project doesn't have it yet."""
+        reporter = self.app.ofieldsreporter
+        if reporter.DoesNamedExpressionExists(BZ_EXPRESSION):
+            return
+        reporter.CalcStack("clear")
+        reporter.EnterQty("B")
+        reporter.CalcOp("ScalarZ")
+        reporter.CalcOp("Smooth")
+        reporter.AddNamedExpression(BZ_EXPRESSION, "Fields")
+        reporter.CalcStack("clear")
+
+    def solve(self, setup, cores=None):
+        """Solve ``setup`` in the active design; False when AEDT fails. Save afterwards to keep the solution."""
+        return self.app.analyze_setup(setup, cores=cores)
 
     # --- designs and project ----------------------------------------------
     def set_active_design(self, name):

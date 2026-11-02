@@ -1,27 +1,22 @@
 from abc import ABC, abstractmethod
 
-from ..DesignReader import DesignReader
-from ..ModelEditor import ModelEditor
-
 
 class ActionFailed(RuntimeError):
     """An action (or a step of a procedure) returned a non-zero status from run()."""
 
 
 class AnsysAction(ABC):
-    """One step performed within an app design. Switching design is done outside of this class,
-    except by CopyAndGenerate and SwitchBackToMain, which hold the Session for it.
+    """One step performed on a Session's active design.
 
-    Changes to the design go through ``self.editor`` (ModelEditor), reads through
-    ``self.reader`` (DesignReader). An action that produces something leaves it in
-    ``self.result``.
+    Every read and change goes through ``self.session``, the only way into AEDT.
+    An action that produces something leaves it in ``self.result``.
     """
 
     SUCCESS = 0
     FAILURE = 1
 
-    def __init__(self, app, label="actionx"):
-        self.app = app
+    def __init__(self, session, label="actionx"):
+        self.session = session
         self.label = label
         self.error = None  # what went wrong when act() returns a non-zero status
         self.result = None  # what act() produced, if anything
@@ -37,18 +32,10 @@ class AnsysAction(ABC):
             raise ActionFailed(f"{failed.label} failed: {self.error}")
         return self.result
 
-    @property
-    def editor(self):
-        return ModelEditor(self.app)
-
-    @property
-    def reader(self):
-        return DesignReader(self.app)
-
     def save_changes(self):
         """Save the project; returns SUCCESS or FAILURE."""
         try:
-            self.editor.save()
+            self.session.save()
         except RuntimeError as e:
             self.error = str(e)
             return self.FAILURE
@@ -56,10 +43,10 @@ class AnsysAction(ABC):
 
 
 class AnsysProcedure(AnsysAction):
-    """Actions within the same app that must run in order; stops at the first failure."""
+    """Actions on the same Session that must run in order; stops at the first failure."""
 
-    def __init__(self, actions, app, label="procedure"):
-        super().__init__(app, label)
+    def __init__(self, actions, session, label="procedure"):
+        super().__init__(session, label)
         self.actions = list(actions)
         self.failed = None  # the action that failed, if any
 

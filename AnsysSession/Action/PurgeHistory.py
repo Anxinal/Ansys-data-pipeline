@@ -12,14 +12,14 @@ class PurgeHistory(AnsysAction):
     Refresh the session snapshot after running it.
     """
 
-    def __init__(self, app, names):
-        super().__init__(app, "Purge_History")
+    def __init__(self, session, names):
+        super().__init__(session, "Purge_History")
         self.names = [names] if isinstance(names, str) else list(names)
 
     def act(self):
         self.error = None
         try:
-            self.editor.purge_history(self.names)
+            self.session.purge_history(self.names)
         except (AedtError, ValueError) as e:
             self.error = str(e)
             return self.FAILURE

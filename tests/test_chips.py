@@ -8,7 +8,7 @@ import sys
 import tempfile
 import unittest
 
-from Chips import (Board, Chip, ChipSection, CopyRecord, DesignSnapshot, NumericalPositionFixed, Position, PositionSampler, Terminal,
+from Chips import (Board, Chip, ChipSection, DesignSnapshot, NumericalPositionFixed, Position, PositionSampler, Terminal,
                    TerminalPositionPair)
 from Chips.Components import Boundary, Component, SolidComponent
 from Chips.Generators import FileSectionGenerator, SectionCandidate
@@ -106,15 +106,6 @@ class ChipTests(unittest.TestCase):
         self.assertEqual(sorted(s.name for s in section.spheres), ["Sphere1", "Sphere2"])
         with self.assertRaises(LookupError):
             chip.section("Die")
-
-    def test_extraction_positions_put_spheres_on_terminals(self):
-        chip = ChipSection(chip_components())
-        PositionSampler.reset()
-        positions = chip.extraction_positions(step=0.5, sampler=PositionSampler())
-        self.assertEqual(set(positions), {"VCC", "GND", "Sphere1", "Sphere2"})
-        self.assertEqual(positions["Sphere1"], positions["VCC"])
-        self.assertEqual(positions["Sphere2"], positions["GND"])
-        self.assertTrue(all(p.z is None for p in positions.values()))
 
 
 class PositionTests(unittest.TestCase):
@@ -225,14 +216,6 @@ class SnapshotAndRecordTests(unittest.TestCase):
         self.assertEqual(snapshot.group("board_1"), "BOARD_1")
         self.assertEqual(snapshot.members("board_1"), ["BOARD_1_VCC"])
         self.assertEqual(snapshot.members("nope"), [])
-
-    def test_copy_record_round_trip(self):
-        record = CopyRecord("BOARD_1", "D1", roles={"sphere_vcc": "a", "sphere_gnd": "b"}, copies={"S1": "a"})
-        self.assertEqual(CopyRecord.from_dict(record.to_dict()), record)
-        self.assertEqual(record.spheres, ["a", "b"])
-        placed = CopyRecord("BOARD_1", "D1", pin_counts={"VCC": 399, "GND": 258}, analysis_design="D1_BOARD_1")
-        self.assertEqual(CopyRecord.from_dict(placed.to_dict()), placed)
-        self.assertEqual(CopyRecord.from_dict({"group": "old", "source_design": "D1"}).pin_counts, {})
 
     def test_chip_layer_does_not_load_pyaedt(self):
         self.assertFalse(any(name.startswith("ansys") for name in sys.modules))

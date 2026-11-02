@@ -7,7 +7,7 @@ from .Positions import Position, PositionSampler
 
 
 class ChipSection(Chip):
-    """A chip with exactly one board: the section that is copied and analysed.
+    """A chip with exactly one board: the section that is analysed.
 
     Made by Chip.section(board) from a main chip with several boards, or directly
     (e.g. for a copy's analysis design, where only one board remains).
@@ -45,19 +45,3 @@ class ChipSection(Chip):
         """
         sampler = PositionSampler() if sampler is None else sampler
         return sampler.sample_pair(self.feasible_positions(step, origin)).as_dict()
-
-    def extraction_positions(self, step=DEFAULT_GRID_STEP, origin=None, sampler=None):
-        """{component name: Position} for ExtractCopy.
-
-        VCC and GND get terminal_positions(); the two spheres sit at those same XY
-        positions (the sphere nearest VCC goes to VCC's), each keeping its own
-        height. The board gets no position: it is never moved.
-        """
-        targets = self.terminal_positions(step, origin, sampler)
-        positions = {}
-        for terminal in (self.vcc, self.gnd):
-            positions[terminal.name] = targets[terminal.label]
-        near_vcc, near_gnd = self.get_spheres()
-        positions[near_vcc.name] = targets["VCC"]
-        positions[near_gnd.name] = targets["GND"]
-        return positions
