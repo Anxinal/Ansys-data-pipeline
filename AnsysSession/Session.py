@@ -10,13 +10,15 @@ from ansys.aedt.core import Desktop
 from .DesignReader import DesignReader
 from .ModelEditor import ModelEditor
 from .Report import ProjectReport
+from .GrpcCompatibility import local_grpc_port_detection
 
 
 class Session:
 
     def __init__(self, path: str, design=None, non_graphical=True):
         self.path = path
-        desktop = Desktop(non_graphical=non_graphical, new_desktop=True)
+        with local_grpc_port_detection():
+            desktop = Desktop(non_graphical=non_graphical, new_desktop=True)
         try:
             # The design's app object, e.g. ansys.aedt.core.Maxwell3d (not a Desktop).
             self.app = desktop.load_project(path, design_name=design)

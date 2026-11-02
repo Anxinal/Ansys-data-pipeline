@@ -135,6 +135,9 @@ for name, member in [('ansys.aedt.core', 'Desktop'),
     module = types.ModuleType(name)
     setattr(module, member, Mock())
     sys.modules[name] = module
+desktop_module = types.ModuleType('ansys.aedt.core.desktop')
+desktop_module.is_grpc_session_active = Mock(return_value=True)
+sys.modules[desktop_module.__name__] = desktop_module
 from AnsysSession.Session import Session
 desktop = sys.modules['ansys.aedt.core'].Desktop
 session = Session('test.aedt', design='D1', non_graphical=False)

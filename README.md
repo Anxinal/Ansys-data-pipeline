@@ -52,6 +52,27 @@ Rules of thumb:
 
 Run the tests (no AEDT needed): `python -m unittest discover tests`
 
+## Snapshot cells and connector movement
+
+`scripts/sync_sphere_moves.py --port <existing AEDT port>` reads only the configured project's
+configured design (`DESIGN = None` uses its active design). `--apply` adds a fixed base correction
+and copies each terminal's pin-driven Move to its matching sphere, verifies the geometry, and saves
+that project. Histories and results are recorded under `Result/Movement/`.
+
+`python scripts/export_snapshot_grid.py` exports the measured `L4L3_Separate87` bottom snapshot
+using that recorded movement mapping. `SNAPSHOT_GRID_STEP` is the physical cell size; connector
+centers use the actual design pitches. The existing design has 0.798 mm X pitch, 0.800 mm Y pitch,
+and an existing GND base offset of one X column relative to VCC. The requested 0.798 mm square
+cells therefore leave 0.002 mm between rows. `DEFAULT_GRID_STEP` remains the Bz sampling step.
+
+The grid stays fixed in model coordinates when the snapshot is cropped. Background, board and
+final crop offsets are retained; pixel boundaries are projected and rounded in the original image
+before translating them into a crop. The exporter does not resize the source or cells. Native cells
+may differ by a pixel because of raster rounding; uniform cells use white padding only.
+The ZIP in `Result/Grid/L4L3_Separate87_pin_aligned_0p798mm.zip` includes a native-scale overview,
+both forms of the cells, and CSV/JSON records of physical centers, crop offsets and pin mappings.
+Cells extending beyond the 20-by-20 pin array are flagged rather than assigned an invalid pin count.
+
 ## Tutorial: automatic Bz analysis
 
 ### From main.py

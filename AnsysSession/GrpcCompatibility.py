@@ -2,9 +2,40 @@
 from contextlib import contextmanager
 from importlib.metadata import version
 from threading import RLock
+import importlib
+import socket
 
 
 _activation_lock = RLock()
+
+
+@contextmanager
+def local_grpc_port_detection(port=None):
+    """Accept a reachable localhost port when process discovery misses it.
+
+    The native AEDT client still performs its real RPC connection. This changes
+    only the preliminary process-based check, for the selected port and scope.
+    Leave port unset around a new Desktop constructor to check its assigned port.
+    """
+    module = importlib.import_module("ansys.aedt.core.desktop")
+    with _activation_lock:
+        original = module.is_grpc_session_active
+
+        def detect(candidate, machine=None):
+            detected = original(candidate, machine)
+            if detected or (port is not None and candidate != port) or not candidate or machine not in (None, "", "localhost", "127.0.0.1", "::1"):
+                return detected
+            try:
+                with socket.create_connection(("127.0.0.1", candidate), timeout=1):
+                    return True
+            except OSError:
+                return False
+
+        module.is_grpc_session_active = detect
+        try:
+            yield
+        finally:
+            module.is_grpc_session_active = original
 
 
 @contextmanager

@@ -4,7 +4,7 @@ from PIL import Image
 from configs import BACKGROUND_TOLERANCE
 
 
-def crop_to_content(image: Image.Image, tolerance=BACKGROUND_TOLERANCE) -> Image.Image:
+def crop_to_content(image: Image.Image, tolerance=BACKGROUND_TOLERANCE, return_box=False):
     """``image`` cut down to what differs from its background, so the content starts at pixel (0, 0).
 
     The background is taken from each row's leftmost pixel, which also covers
@@ -15,7 +15,9 @@ def crop_to_content(image: Image.Image, tolerance=BACKGROUND_TOLERANCE) -> Image
     rows, columns = np.flatnonzero(content.any(axis=1)), np.flatnonzero(content.any(axis=0))
     if not rows.size:
         raise ValueError("The image shows nothing but its background")
-    return image.crop((columns[0], rows[0], columns[-1] + 1, rows[-1] + 1))
+    box = tuple(map(int, (columns[0], rows[0], columns[-1] + 1, rows[-1] + 1)))
+    cropped = image.crop(box)
+    return (cropped, box) if return_box else cropped
 
 
 class BoardImage:
@@ -26,7 +28,7 @@ class BoardImage:
     0 up to max_x and max_y.
     """
 
-    def __init__(self, image: Image.Image, pixel_size, max_x, max_y, name=""):
+    def __init__(self, image: Image.Image, pixel_size, max_x, max_y, name="", source_offset=(0, 0)):
         """pixel_size is one cell's (width, height) in image pixels; name is the board's, e.g. its component name."""
         width, height = pixel_size
         if max_x < 0 or max_y < 0:
@@ -39,6 +41,7 @@ class BoardImage:
         self._max_x = max_x
         self._max_y = max_y
         self.name = name
+        self.source_offset = tuple(source_offset)  # this image's top-left in the original export
 
     def get_pixel_size(self):
         return self._pixel_size
@@ -61,7 +64,8 @@ class BoardImage:
             raise ValueError(f"({x}, {y}) is outside the grid 0..{self._max_x} x 0..{self._max_y}")
         width, height = self._pixel_size
         left, top = x * width, y * height
-        return BoardCell(self.cell_name(x, y), x, y, self.image.crop((left, top, left + width, top + height)))
+        return BoardCell(self.cell_name(x, y), x, y, self.image.crop((left, top, left + width, top + height)),
+                         source_offset=(self.source_offset[0]+left, self.source_offset[1]+top))
 
     def split_all(self):
         """Every cell of the board as a BoardCell, row by row (the order of cell_coords())."""
@@ -75,8 +79,8 @@ class BoardCell(BoardImage):
     A BoardImage of a single cell the size of the whole image; it can't be split further.
     """
 
-    def __init__(self, name, x, y, image: Image.Image):
-        super().__init__(image, image.size, 0, 0, name=name)
+    def __init__(self, name, x, y, image: Image.Image, source_offset=(0, 0)):
+        super().__init__(image, image.size, 0, 0, name=name, source_offset=source_offset)
         self.x = x
         self.y = y
 
