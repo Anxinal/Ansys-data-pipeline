@@ -42,6 +42,31 @@ class ModelEditor:
         except Exception as e:
             raise AedtError(f'AEDT could not append a Move to "{name}": {e}') from e
 
+    def set_model_state(self, names, model):
+        """Change model participation in batches without reading object geometry."""
+        names = list(dict.fromkeys(names))
+        editor = self.modeler.oeditor
+        for start in range(0, len(names), 128):
+            batch = names[start:start+128]
+            editor.ChangeProperty(["NAME:AllTabs", ["NAME:Geometry3DAttributeTab",
+                ["NAME:PropServers", *batch], ["NAME:ChangedProps", ["NAME:Model", "Value:=", bool(model)]]]])
+        non_model = set(editor.GetObjectsInGroup("Non Model"))
+        wrong = [name for name in names if (name not in non_model) != bool(model)]
+        if wrong:
+            raise AedtError(f"Model-state change did not apply to {wrong}")
+
+    def set_move_vector(self, name, operation, vector):
+        """Edit an existing Move, then verify all three stored expressions."""
+        if len(vector) != 3:
+            raise ValueError("A Move vector needs three expressions")
+        native = self.modeler.oeditor
+        native.ChangeProperty(["NAME:AllTabs", ["NAME:Geometry3DCmdTab",
+            ["NAME:PropServers", f"{name}:{operation}"],
+            ["NAME:ChangedProps", ["NAME:Move Vector", "X:=", vector[0], "Y:=", vector[1], "Z:=", vector[2]]]]])
+        node = native.GetChildObject(name).GetChildObject(operation)
+        if [str(node.GetPropValue(f"Move Vector/{axis}")) for axis in "XYZ"] != list(vector):
+            raise AedtError(f"Move expressions did not update on {name}:{operation}")
+
     def copy_in_place(self, name):
         """Copy/paste ``name``; same position, excitations not copied. Returns the copy's name."""
         self.modeler.copy([name])
@@ -149,11 +174,15 @@ class ModelEditor:
 
     def set_pin_count(self, variable, count):
         """Set the pin-count design variable (e.g. "PinCount") to ``count``; the geometry driven by it moves."""
-        expression = str(count)
-        try:
-            read_back = self.set_variable(variable, expression=expression)["expression"]
-        except KeyError as e:
-            raise AedtError(e.args[0]) from None
+        return self.set_pin_expression(variable, str(count))
+
+    def set_pin_expression(self, variable, expression):
+        """Write and verify a pin expression through the live design API."""
+        expression = str(expression)
+        self.app.odesign.ChangeProperty(["NAME:AllTabs", ["NAME:LocalVariableTab",
+            ["NAME:PropServers", "LocalVariables"],
+            ["NAME:ChangedProps", [f"NAME:{variable}", "Value:=", expression]]]])
+        read_back = str(self.app.odesign.GetVariableValue(variable))
         # PyAEDT only logs when AEDT rejects an expression, so check what was kept.
         if read_back != expression:
             raise AedtError(f'AEDT kept "{variable}" at {read_back} instead of {expression}')

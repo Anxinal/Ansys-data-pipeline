@@ -30,6 +30,8 @@ def check_settings(settings=configs):
         raise ValueError('RUN_MODE "copy" needs configs.COPY_GROUP, e.g. "BOARD_1"')
     if mode == "sections" and not Path(settings.SECTIONS_FILE or "").is_file():
         raise ValueError(f"section file does not exist: {settings.SECTIONS_FILE!r} (configs.SECTIONS_FILE)")
+    if mode == "sections" and getattr(settings,"SECTION_WORKFLOW","copy") not in ("root","copy"):
+        raise ValueError('configs.SECTION_WORKFLOW must be "root" or "copy"')
     for name in ("EXTRACT_ONLY", "PURGE_HISTORY"):
         if getattr(settings, name) and mode not in ("extract", "sections"):
             raise ValueError(f'configs.{name} needs RUN_MODE "extract" or "sections", not "{mode}"')
@@ -44,6 +46,9 @@ def bz_options(settings=configs):
 
 def run_sections(session, settings=configs):
     """Validate every file row before the first copy; isolate each pin pair in its own design."""
+    if getattr(settings,"SECTION_WORKFLOW","copy") == "root" and not settings.EXTRACT_ONLY:
+        from AnsysSession.RootAnalysis import run_root_sections
+        return run_root_sections(session,settings,Path(settings.DEFAULT_OUTPUT_DIR)/"RootSections")
     from AnsysSession.Action.CopyandGenerate import CopyandGenerate
     from AnsysSession.Action.ExtractCopy import original_components
 

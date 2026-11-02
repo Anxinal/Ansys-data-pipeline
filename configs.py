@@ -4,7 +4,7 @@ from pathlib import Path
 
 # --- Run (main.py takes no command-line options; edit these instead) ---
 DEFAULT_INPUT_PATH = "E:/An Xiao/data/L4321_M16.aedt"  # the .aedt project to open
-DESIGN = None  # design to open; None for the project's active design
+DESIGN = "Maxwell3DDesign3"  # design to open; None for the project's active design
 SHOW_INFO = False  # also print everything the project can tell about itself
 SHOW_DESKTOP = False  # show the AEDT desktop, and leave it and the project open afterwards
 # What main.py does:

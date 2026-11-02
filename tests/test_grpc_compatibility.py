@@ -5,10 +5,47 @@ import types
 import unittest
 from unittest.mock import patch
 
-from AnsysSession.GrpcCompatibility import local_grpc_metadata
+from AnsysSession.GrpcCompatibility import local_grpc_metadata, local_grpc_port_detection
 
 
 class GrpcCompatibilityTests(unittest.TestCase):
+    def test_new_desktop_can_detect_its_dynamically_assigned_port(self):
+        from unittest.mock import Mock, MagicMock
+        module = types.ModuleType('ansys.aedt.core.desktop')
+        original = Mock(return_value=False)
+        module.is_grpc_session_active = original
+        with patch.dict(sys.modules,{module.__name__:module}), \
+             patch('AnsysSession.GrpcCompatibility.socket.create_connection',return_value=MagicMock()):
+            with local_grpc_port_detection():
+                self.assertTrue(module.is_grpc_session_active(55900,'127.0.0.1'))
+                self.assertFalse(module.is_grpc_session_active(0))
+            self.assertIs(module.is_grpc_session_active,original)
+
+    def test_port_fallback_is_limited_to_selected_local_port_and_restored(self):
+        from unittest.mock import Mock, MagicMock
+        module = types.ModuleType('ansys.aedt.core.desktop')
+        original = Mock(return_value=False)
+        module.is_grpc_session_active = original
+        with patch.dict(sys.modules, {module.__name__:module}), \
+             patch('AnsysSession.GrpcCompatibility.socket.create_connection',return_value=MagicMock()) as connect:
+            with self.assertRaisesRegex(RuntimeError,'done'):
+                with local_grpc_port_detection(64286):
+                    self.assertTrue(module.is_grpc_session_active(64286,'127.0.0.1'))
+                    self.assertFalse(module.is_grpc_session_active(50000))
+                    self.assertFalse(module.is_grpc_session_active(64286,'remote-server'))
+                    connect.assert_called_once_with(('127.0.0.1',64286),timeout=1)
+                    raise RuntimeError('done')
+            self.assertIs(module.is_grpc_session_active,original)
+
+    def test_unreachable_selected_port_is_not_reported_as_active(self):
+        from unittest.mock import Mock
+        module = types.ModuleType('ansys.aedt.core.desktop')
+        module.is_grpc_session_active = Mock(return_value=False)
+        with patch.dict(sys.modules,{module.__name__:module}), \
+             patch('AnsysSession.GrpcCompatibility.socket.create_connection',side_effect=OSError('refused')):
+            with local_grpc_port_detection(64286):
+                self.assertFalse(module.is_grpc_session_active(64286))
+
     def test_scoped_metadata_and_property_delegation(self):
         writes = []
 

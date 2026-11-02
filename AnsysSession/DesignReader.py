@@ -32,6 +32,16 @@ class DesignReader:
     def object_names(self):
         return list(self.app.modeler.object_names)
 
+    def selected_components(self, names):
+        """Read geometry only for explicit source parts, without a full snapshot."""
+        types = {str(name):kind for group,kind in TYPE_GROUPS.items()
+                 for name in self.oeditor.GetObjectsInGroup(group)}
+        missing = set(names)-types.keys()
+        if missing:
+            raise LookupError(f"Configured source components are missing: {sorted(missing)}")
+        return [Component.create(name,types[name],bounding_box=[float(v) for v in self.oeditor.GetObjectBoundingBox(name)])
+                for name in sorted(set(names))]
+
     def snapshot(self):
         """The active design as a DesignSnapshot."""
         app, oeditor = self.app, self.oeditor
