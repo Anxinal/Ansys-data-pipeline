@@ -48,6 +48,16 @@ class BoardImageTests(unittest.TestCase):
         cropped = crop_to_content(Image.fromarray(pixels.astype(np.uint8)))
         self.assertEqual(cropped.size, (35, 20))
 
+    def test_crop_offset_survives_subsequent_cell_extraction(self):
+        image = Image.new("RGB", (100, 100), "white")
+        image.paste("green", (17, 23, 57, 63))
+        cropped, source_box = crop_to_content(image, return_box=True)
+        self.assertEqual(source_box, (17, 23, 57, 63))
+        board_image = BoardImage(cropped, (10, 10), 3, 3, source_offset=source_box[:2])
+        cell = board_image.cell(2, 1)
+        self.assertEqual(cell.source_offset, (37, 33))
+        np.testing.assert_array_equal(np.asarray(cell.image), np.asarray(image.crop((37,33,47,43))))
+
 
 class BoardImageDatasetTests(unittest.TestCase):
     @classmethod

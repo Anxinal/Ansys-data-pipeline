@@ -72,8 +72,10 @@ IN_PLACE_OFFSET = [1.0, 0.0, 0.0]
 
 EXPORT_DATA_FOLDER = "/data"
 
-# For CNN image clipping in no. of pixels
-GRID_SIZE = []
+# Snapshot cell width/height in model units; centers follow the design's pin Move pitch.
+SNAPSHOT_GRID_STEP = (0.798, 0.798)
+# Pixel equivalent for the current L4L3_Separate87 bottom-view snapshot.
+GRID_SIZE = [53, 53]
 
 # How far (0-255, per colour channel) a pixel of an AEDT model picture may differ from the
 # background and still count as background (ImageData/BoardImage.py's crop_to_content).

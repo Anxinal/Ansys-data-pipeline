@@ -57,19 +57,34 @@ from PIL import Image
 import AnsysSession.DesignReader as design_reader
 from AnsysSession.Action.GenerateSnapshot import GenerateSnapshot
 
-class Post:
+class Editor:
     def __init__(self, draw):
         self.draw = draw
-    def export_model_picture(self, full_name, **options):
-        assert options['orientation'] == 'top' and options['selections'] == ['Board'], options
+    def ShowWindow(self):
+        pass
+    def FitAll(self):
+        pass
+    def ExportModelImageToFile(self, full_name, width, height, arguments):
+        options = dict(zip(arguments[1::2], arguments[2::2]))
+        assert options['Orientation:='] == 'bottom' and options['Selections:='] == 'Board', options
+        assert options['FieldPlotSelections:='] == 'none', options
         if self.draw:  # gradient background with a 75 x 40 board at (30, 20)
             pixels = np.linspace(200, 255, 120)[:, None, None] * np.ones((1, 160, 3))
             pixels[20:60, 30:105] = [40, 120, 40]
             Image.fromarray(pixels.astype(np.uint8)).save(full_name, quality=90)
         return str(full_name)
 
+class App:
+    @property
+    def post(self):
+        raise AssertionError('Snapshot must not initialize postprocessing or parse the project')
+
 folder = tempfile.mkdtemp()
-app = Mock(working_directory=folder, design_name='Maxwell 3D: copy', post=Post(True))
+app = App()
+app.working_directory = folder
+app.design_name = 'Maxwell 3D: copy'
+app.desktop_class = types.SimpleNamespace(non_graphical=False)
+app.modeler = types.SimpleNamespace(oeditor=Editor(True))
 board = Mock()
 board.name = 'Board'
 design_reader.GRID_SIZE = [10, 10]
@@ -77,7 +92,10 @@ image = GenerateSnapshot(app, board).run()
 assert image.image.size == (75, 40), image.image.size
 assert (image.name, len(image.split_all())) == ('Board', 7 * 4)
 
-app.post = Post(False)
+app.modeler.oeditor = Editor(False)
+action = GenerateSnapshot(app, board)
+assert action.act() == action.FAILURE and 'graphical mode' in action.error, action.error
+app.desktop_class.non_graphical = True
 action = GenerateSnapshot(app, board)
 assert action.act() == action.FAILURE and 'graphical mode' in action.error, action.error
 design_reader.GRID_SIZE = []

@@ -28,6 +28,20 @@ class ModelEditor:
         if not self.modeler.move([name], list(vector)):
             raise AedtError(f'AEDT could not move "{name}" by {list(vector)}')
 
+    def move_with_expressions(self, name, vector):
+        """Append a Move operation retaining its three AEDT expressions verbatim."""
+        vector = list(vector)
+        if len(vector) != 3 or any(not isinstance(v, str) or not v.strip() for v in vector):
+            raise ValueError("Move expressions must be three non-empty strings")
+        try:
+            self.modeler.oeditor.Move(
+                ["NAME:Selections", "Selections:=", name, "NewPartsModelFlag:=", "Model"],
+                ["NAME:TranslateParameters", "TranslateVectorX:=", vector[0],
+                 "TranslateVectorY:=", vector[1], "TranslateVectorZ:=", vector[2]],
+            )
+        except Exception as e:
+            raise AedtError(f'AEDT could not append a Move to "{name}": {e}') from e
+
     def copy_in_place(self, name):
         """Copy/paste ``name``; same position, excitations not copied. Returns the copy's name."""
         self.modeler.copy([name])

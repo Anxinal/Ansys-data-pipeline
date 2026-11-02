@@ -71,21 +71,33 @@ class DesignReader:
         Only the component is drawn (no axis, grid, ruler or region). The cells are
         configs.GRID_SIZE pixels and the grid holds as many whole cells as fit.
         AEDT draws model pictures only in graphical mode.
+
+        Export through the model editor: initializing app.post parses the entire
+        saved project to load field plots, which a geometry picture does not need.
         """
         if len(GRID_SIZE) != 2:
             raise ValueError(f"configs.GRID_SIZE must be [width, height] in pixels, not {GRID_SIZE}")
         app = self.app
+        if app.desktop_class.non_graphical:
+            raise RuntimeError("AEDT model snapshots need graphical mode")
         path = Path(app.working_directory) / f"{file_stem(app.design_name)}_{file_stem(component.name)}_top.jpg"
         path.unlink(missing_ok=True)  # so an earlier picture is never read as this one
-        app.post.export_model_picture(path, show_axis=False, show_grid=False, show_ruler=False, show_region="False",
-                                      selections=[component.name], orientation="top")
+        editor = self.oeditor
+        editor.ShowWindow()
+        editor.FitAll()
+        editor.ExportModelImageToFile(str(path), 0, 0, [
+            "NAME:SaveImageParams",
+            "ShowAxis:=", "False", "ShowGrid:=", "False", "ShowRuler:=", "False",
+            "ShowRegion:=", "False", "Selections:=", component.name,
+            "FieldPlotSelections:=", "none", "Orientation:=", "bottom",
+        ])
         if not path.is_file():
             raise RuntimeError(f'AEDT exported no picture of "{component.name}"; it needs graphical mode')
         with Image.open(path) as picture:
-            image = crop_to_content(picture)
+            image, source_box = crop_to_content(picture, return_box=True)
         width, height = GRID_SIZE
         return BoardImage(image, (width, height), image.width // width - 1, image.height // height - 1,
-                          name=component.name)
+                          name=component.name, source_offset=source_box[:2])
 
     def _boundaries(self, object_faces):
         """Read live properties/assignments without parsing the saved project.
