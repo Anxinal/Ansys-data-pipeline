@@ -17,7 +17,7 @@ CORES = None  # cores for the solve; None for AEDT's default
 SOLVE = True  # False reuses the setup's existing solution
 
 # --- Bz analysis (Action/AnalysisActions/) ---
-DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parent / "Result" / "Bz"
+DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parent / "Result"  # root of every run's output
 DEFAULT_SETUP = "Setup1"
 DEFAULT_SCAN_HEIGHT = 0.060  # image plane height above the board's top face
 DEFAULT_GRID_STEP = 0.030  # image pixel size; also the Position grid step

@@ -31,7 +31,7 @@ def check_settings(settings=configs):
 
 def bz_options(settings=configs):
     """The Bz analysis settings, as the keyword arguments of BzProcedure."""
-    return dict(setup=settings.DEFAULT_SETUP, output_dir=settings.DEFAULT_OUTPUT_DIR,
+    return dict(setup=settings.DEFAULT_SETUP,
                 scan_height=settings.DEFAULT_SCAN_HEIGHT, step=settings.DEFAULT_GRID_STEP,
                 cores=settings.CORES, solve=settings.SOLVE)
 

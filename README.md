@@ -107,7 +107,7 @@ pasted design does not trigger a remote `GetPropNames` lookup. Actual AEDT prope
 writes retain their normal behavior, and the guard is removed after each operation.
 
 Set `DEFAULT_GND`, `DEFAULT_VCC`, `DEFAULT_SPEHRE` and `BOARD` in `configs.py` when the automatic part detection
-doesn't match your model. Results go to `data_export_default/` (`configs.DEFAULT_OUTPUT_DIR`):
+doesn't match your model. Results go to `Bz/` under `configs.DEFAULT_OUTPUT_DIR`:
 `<project>_<design>_<setup>_Bz.fld` (raw AEDT export) and `.npz` (`x`, `y`, `bz[ny, nx]` in tesla).
 
 ### From Python, in an opened session

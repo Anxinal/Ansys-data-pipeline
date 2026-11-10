@@ -12,6 +12,7 @@ from Chips import (Board, Chip, ChipSection, DesignSnapshot, NumericalPositionFi
                    TerminalPositionPair)
 from Chips.Components import Boundary, Component, SolidComponent
 from Chips.Generators import FileSectionGenerator, SectionCandidate
+from Chips.Positions.PositionSampler import AllPermutationSampler
 
 
 def solid(name, box, faces=6, material="copper", boundaries=()):
@@ -148,6 +149,29 @@ class PositionTests(unittest.TestCase):
         PositionSampler.reset()
         self.assertEqual(PositionSampler().sample_pair_batch(cells, 3), first)
         self.assertIsInstance(first[0], TerminalPositionPair)
+
+    def test_all_permutation_sampler_lists_each_pair_of_different_cells_once(self):
+        cells = ["a", "b", "c", "d"]
+        sampler = AllPermutationSampler()
+        pairs = [(p.a, p.b) for p in sampler.sample_pair_batch(cells)]
+        self.assertEqual(pairs, [("a", "b"), ("a", "c"), ("a", "d"), ("b", "c"), ("b", "d"), ("c", "d")])
+        self.assertEqual(sampler.sample_pair_batch(cells, 6), sampler.sample_pair_batch(cells))
+        self.assertEqual([(p.a, p.b) for p in sampler.sample_pair_batch(cells, 2)], [("a", "b"), ("a", "c")])
+        for n in (0, 7, -2):
+            with self.assertRaises(ValueError):
+                sampler.sample_pair_batch(cells, n)
+        with self.assertRaises(ValueError):
+            sampler.sample_pair_batch(["a"])
+
+    def test_samplers_keep_their_own_instance(self):
+        PositionSampler.reset()
+        AllPermutationSampler.reset()
+        self.addCleanup(PositionSampler.reset)
+        self.addCleanup(AllPermutationSampler.reset)
+        base = PositionSampler()
+        self.assertIsInstance(AllPermutationSampler(), AllPermutationSampler)
+        self.assertIs(PositionSampler(), base)
+        self.assertIs(AllPermutationSampler(), AllPermutationSampler())
 
 
 class GeneratorTests(unittest.TestCase):

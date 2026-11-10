@@ -6,6 +6,9 @@ from ..Action import AnsysProcedure
 from .Analysis import BzAnalysis
 from .Export import BzExport
 
+# Bz results get their own sub-folder of the shared output root.
+BZ_OUTPUT_DIR = DEFAULT_OUTPUT_DIR / "Bz"
+
 
 class BzProcedure(AnsysProcedure):
     """BzAnalysis then BzExport on the same Session; without ``solve`` only the export runs.
@@ -13,7 +16,7 @@ class BzProcedure(AnsysProcedure):
     ``result`` is the export's summary once the procedure has run.
     """
 
-    def __init__(self, session, board, setup=DEFAULT_SETUP, output_dir=DEFAULT_OUTPUT_DIR,
+    def __init__(self, session, board, setup=DEFAULT_SETUP, output_dir=BZ_OUTPUT_DIR,
                  scan_height=DEFAULT_SCAN_HEIGHT, step=DEFAULT_GRID_STEP, cores=None, solve=True, label="bz"):
         self.export = BzExport(session, board, setup, output_dir, scan_height, step)
         actions = [BzAnalysis(session, setup, cores), self.export] if solve else [self.export]
