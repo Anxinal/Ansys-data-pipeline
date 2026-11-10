@@ -1,1 +1,11 @@
-board = L4L3_Separate87 Sphere_positions = 399 258
+board = L4L3_Separate87 Sphere_positions = 317 376 399 258 294
+board = L4L3_Separate90 Sphere_positions = 126 166 206 246 267
+board = L4L3_Separate172 Sphere_positions = 132 151 172 191 212 231 252 271 292
+board = L4L3_Separate174 Sphere_positions = 107 147 187 227
+board = L4L3_Separate177 Sphere_positions = 2 61 84 120 143 202 261 284 343 320
+board = L4L3_Separate196 Sphere_positions = 307 366 330 389
+board = L4L3_Separate275 Sphere_positions = 58 117 176 153 199 235
+board = L4L3_Separate281 Sphere_positions = 12 44 71 94
+board = L4L3_Separate281 Sphere_positions = 35 94
+board = L4L3_Separate288 Sphere_positions = 170 210 250 248 269 288
+board = L4L3_Separate291 Sphere_positions = 130 149
