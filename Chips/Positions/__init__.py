@@ -5,7 +5,7 @@ from .Position import Position
 from .NumericalPositionFixed import NumericalPositionFixed
 from .NumericallyPlaced import NumericallyPlaced
 from .PositionPair import PositionPair, TerminalPositionPair
-from .PositionSampler import PositionSampler
+from .PositionSampler import PositionSampler, AllCombinationSampler
 
-__all__ = ["NumericalPositionFixed", "NumericallyPlaced", "Position", "PositionPair", "PositionSampler",
+__all__ = ["AllCombinationSampler", "NumericalPositionFixed", "NumericallyPlaced", "Position", "PositionPair", "PositionSampler",
            "TerminalPositionPair"]

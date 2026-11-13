@@ -22,5 +22,7 @@ class RootCandidates(AnsysAction):
         self.names = sorted({settings.DEFAULT_GND, settings.DEFAULT_VCC, *settings.DEFAULT_SPEHRE, *boards})
         chip = Chip(self.session.selected_components(self.names), gnd=settings.DEFAULT_GND, vcc=settings.DEFAULT_VCC,
                     spheres=settings.DEFAULT_SPEHRE, boards=list(dict.fromkeys(boards)), units=self.session.units)
-        self.result = list(FileSectionGenerator(chip, settings.SECTIONS_FILE))
+        self.result = list(FileSectionGenerator(chip, settings.SECTIONS_FILE,
+                           sampler=getattr(settings, 'SECTION_SAMPLER', None),
+                           sample_count=getattr(settings, 'SECTION_SAMPLE_COUNT', -1)))
         return self.SUCCESS

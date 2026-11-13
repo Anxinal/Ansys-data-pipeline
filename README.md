@@ -73,6 +73,34 @@ Cells extending beyond the 20-by-20 pin array are flagged rather than assigned a
 
 ## Tutorial: automatic Bz analysis
 
+### Current-density magnitude
+
+For a GUI run from VS Code, open `run_j_gui.py` and choose **Run Python File** with
+the project's `.venv` interpreter, or select **J analysis (AEDT GUI)** and press F5.
+The board and pin pool are editable at the top of that file. It uses the configured
+project/design and default solver settings, reuses that project's session when
+available, and leaves AEDT open. Results go to a new `Result/J_GUI_<timestamp>/J/`
+folder on each run. A genuinely headless existing session must be closed before
+the runner can open a graphical session for the same project.
+
+Set `FIELD_QUANTITY = "J"` to export `|J|` instead of Bz. J uses the same setup,
+solver settings and `DEFAULT_GRID_STEP`; `J_PLANE_FRACTION = 0.5` places its XY
+sampling plane halfway through the selected conductor. Bz's scan height above the
+board is not used for J, since conduction current density must be sampled inside
+the conductor. Maxwell provides the [Mag_J current-density quantity](https://ansyshelp.ansys.com/public/Views/Secured/Electronics/v251/en/Subsystems/Maxwell/Content/Maxwell/PlottingStandardFieldQuantities.htm).
+
+For section runs, a pin pool such as `Sphere_positions = 317 376 399` generates
+all three pairs through `AllCombinationSampler.sample_pair_batch` with its default
+batch size: VCC/GND 317/376, 317/399, and 376/399. Critical terminals, spheres and
+background remain active throughout root selection; original flags and pins are
+restored after the cases. No design is copied.
+
+J outputs go under `Result/J/` (or `DEFAULT_OUTPUT_DIR/J/`): raw `.fld` files and
+compressed `.npz` files containing `x`, `y`, `j[ny,nx]`, `z`, coordinate `units`,
+`field_units="A/m^2"`, `quantity="|J|"`, `solution`, and a finite-sample `valid` mask.
+Missing samples remain NaN; negative or entirely undefined magnitude exports fail validation.
+`run_j_sections(session, settings)` and `JProcedure` expose the same workflow from Python.
+
 ### From main.py
 
 `python main.py` takes no options: set everything in the "Run" section of `configs.py`, then run it.

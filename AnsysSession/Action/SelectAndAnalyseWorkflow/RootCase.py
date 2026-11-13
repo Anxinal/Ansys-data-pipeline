@@ -19,23 +19,24 @@ class RootCase(AnsysProcedure):
     """One SectionCandidate solved in place; writes ``result`` to <case_dir>/result.json.
 
     ``previous_board`` is the board the last case left active, None for the first case.
-    ``bz_options`` are BzProcedure's options; the export goes to ``case_dir``.
+    ``bz_options`` holds the chosen procedure's options; the export goes to ``case_dir``.
     """
 
-    def __init__(self, session, candidate, bz_options, case_dir, previous_board=None):
+    def __init__(self, session, candidate, bz_options, case_dir, previous_board=None, procedure=BzProcedure):
         section, pair = candidate.section, candidate.pair
         self.case_dir = Path(case_dir)
-        self.bz = BzProcedure(session, section.board, **{**bz_options, "output_dir": self.case_dir})
+        self.analysis = procedure(session, section.board, **{**bz_options, "output_dir": self.case_dir})
         steps = [*board_steps(session, section.board, previous_board),
-                 SetTerminalPositions(session, section, pair), CheckValidity(session), self.bz]
+                 SetTerminalPositions(session, section, pair), CheckValidity(session), self.analysis]
         super().__init__(steps, session, self.case_dir.name)
         self.summary = {"design": session.design, "board": section.board.name, "workflow": "root",
                         "VCC pin count": pair.a.value, "GND pin count": pair.b.value}
 
     def act(self):
         self.case_dir.mkdir(parents=True, exist_ok=True)
+        print(f'Running {self.case_dir.name}: {self.summary}', flush=True)
         status = super().act()
-        self.result = {**self.summary, **(self.bz.result or {}), "status": "failed" if status else "success"}
+        self.result = {**self.summary, **(self.analysis.result or {}), "status": "failed" if status else "success"}
         if status:
             self.result["error"] = f"{self.failed.label}: {self.error}"
         (self.case_dir / "result.json").write_text(json.dumps(self.result, indent=2, default=str))

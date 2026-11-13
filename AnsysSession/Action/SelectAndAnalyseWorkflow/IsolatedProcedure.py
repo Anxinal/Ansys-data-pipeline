@@ -6,13 +6,13 @@ from .SelectForAnalysis import DeselectAll
 
 
 class IsolatedProcedure(AnsysProcedure):
-    """Run ``steps`` with only the background active, for them to select what they need.
+    """Run ``steps`` with preserved parts and background active; select other parts as needed.
 
     ``selected`` names the objects they will use, which must exist. The original state always comes back.
     """
 
-    def __init__(self, selected, state_file, steps, session, label="isolated"):
-        deselect = DeselectAll(session, selected, state_file)
+    def __init__(self, selected, state_file, steps, session, label="isolated", preserve=()):
+        deselect = DeselectAll(session, selected, state_file, preserve)
         super().__init__([deselect, BackgroundSelect(session, deselect), *steps], session, label)
         self.restore = RestoreState(session, state_file)
 

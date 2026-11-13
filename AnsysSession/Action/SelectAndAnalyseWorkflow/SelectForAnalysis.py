@@ -29,15 +29,16 @@ class BoardSelect(AnsysAction):
 
 
 class DeselectAll(AnsysAction):
-    """Make every object inactive, saving the original state to ``state_file``; ``result`` is that state."""
+    """Disable objects except ``preserve``, recording their original state in ``state_file``."""
 
-    def __init__(self, session, selected, state_file):
+    def __init__(self, session, selected, state_file, preserve=()):
         super().__init__(session, "Deselect_All")
         self.selected = selected
         self.state_file = state_file
+        self.preserve = preserve
 
     def act(self):
-        self.result = self.session.deselect_all_for_analysis(self.selected, self.state_file)
+        self.result = self.session.deselect_all_for_analysis(self.selected, self.state_file, self.preserve)
         return self.SUCCESS
 
 class SelectNecessaryComponents(AnsysAction):
@@ -63,4 +64,4 @@ class BoardUpdate(AnsysAction):
         self.session.deselect_for_analysis(self.deactive.name)
         self.session.select_for_analysis(self.active.name)
         return self.SUCCESS
-    
+

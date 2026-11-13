@@ -5,7 +5,7 @@ away; snapshots read before a change are out of date afterwards (re-read with
 Session.refresh()). Nothing is saved until save() is called.
 """
 
-from configs import BZ_EXPRESSION, IN_PLACE_OFFSET
+from configs import BZ_EXPRESSION, J_EXPRESSION, IN_PLACE_OFFSET
 from .GrpcCompatibility import local_grpc_metadata
 
 
@@ -243,6 +243,19 @@ class ModelEditor:
     def solve(self, setup, cores=None):
         """Solve ``setup`` in the active design; False when AEDT fails. Save afterwards to keep the solution."""
         return self.app.analyze_setup(setup, cores=cores)
+
+    def ensure_j_expression(self):
+        """Create |J|, the volume current-density magnitude in A/m^2."""
+        reporter = self.app.ofieldsreporter
+        if reporter.DoesNamedExpressionExists(J_EXPRESSION):
+            return
+        reporter.CalcStack("clear")
+        try:
+            reporter.EnterQty("J")
+            reporter.CalcOp("Mag")
+            reporter.AddNamedExpression(J_EXPRESSION, "Fields")
+        finally:
+            reporter.CalcStack("clear")
 
     # --- designs and project ----------------------------------------------
     def set_active_design(self, name):

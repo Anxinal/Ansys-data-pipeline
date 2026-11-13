@@ -1,5 +1,5 @@
 """Convert pin pools to numerical positions and delegate sampling in batches."""
-from ..Positions import NumericalPositionFixed, Position, PositionSampler, TerminalPositionPair
+from ..Positions import NumericalPositionFixed, Position, TerminalPositionPair
 from .SectionCandidate import SectionCandidate
 
 
@@ -11,7 +11,7 @@ def numerical_position(text, origin, z):
     return NumericalPositionFixed.from_string(text, origin=origin, z=z)
 
 
-def sample_candidates(chip, row, count):
+def sample_candidates(chip, row, sampler, count=-1):
     def cell(key):
         return (row.get(key) or "").strip() or None
 
@@ -23,8 +23,8 @@ def sample_candidates(chip, row, count):
     origin = Position.board_origin(section.board)
     pins = cell("sphere_positions")
     pins = pins.split() if pins else [cell("vcc_pin"), cell("gnd_pin")]
-    positions = [numerical_position(pin, origin, section.vcc.center[2]) for pin in pins]
-    pairs = PositionSampler().sample_pair_batch(positions, count)
+    positions = {p.value:p for p in (numerical_position(pin, origin, section.vcc.center[2]) for pin in pins)}
+    pairs = sampler.sample_pair_batch(list(positions.values()), count)
     candidates = []
     for pair in pairs:
         gnd = NumericalPositionFixed.from_number(pair.b.value, step=pair.b.step,

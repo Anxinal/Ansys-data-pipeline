@@ -11,6 +11,7 @@ SHOW_DESKTOP = False  # show the AEDT desktop, and leave it and the project open
 #   "analyse"   solve the design and export Bz above its board
 #   "sections"  solve every section listed in SECTIONS_FILE in place (CSV or "board = ... Sphere_positions = ..." lines)
 RUN_MODE = "analyse"
+FIELD_QUANTITY = "Bz"  # "Bz" above the board, or "J" magnitude inside the conductor
 SECTIONS_FILE = ""  # for "sections"
 BOARD = None  # the board to analyse; needed when the design has several
 CORES = None  # cores for the solve; None for AEDT's default
@@ -24,6 +25,8 @@ DEFAULT_GRID_STEP = 0.030  # image pixel size; also the Position grid step
 # Fields-calculator named expression for the smoothed z-component of B;
 # BzAnalysis creates it in the project when it is missing.
 BZ_EXPRESSION = "smoothscalBz"
+J_EXPRESSION = "magJ"  # magnitude of the volume current-density vector, A/m^2
+J_PLANE_FRACTION = 0.5  # plane through the conductor thickness (0=bottom, 1=top)
 
 # Fields-calculator expressions Session.get_session_info checks for. AEDT can
 # check a named expression by name but has no call that lists them all.

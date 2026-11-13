@@ -12,7 +12,7 @@ from Chips import (Board, Chip, ChipSection, DesignSnapshot, NumericalPositionFi
                    TerminalPositionPair)
 from Chips.Components import Boundary, Component, SolidComponent
 from Chips.Generators import FileSectionGenerator, SectionCandidate
-from Chips.Positions.PositionSampler import AllPermutationSampler
+from Chips.Positions.PositionSampler import AllCombinationSampler
 
 
 def solid(name, box, faces=6, material="copper", boundaries=()):
@@ -150,9 +150,9 @@ class PositionTests(unittest.TestCase):
         self.assertEqual(PositionSampler().sample_pair_batch(cells, 3), first)
         self.assertIsInstance(first[0], TerminalPositionPair)
 
-    def test_all_permutation_sampler_lists_each_pair_of_different_cells_once(self):
+    def test_all_combination_sampler_lists_each_pair_of_different_cells_once(self):
         cells = ["a", "b", "c", "d"]
-        sampler = AllPermutationSampler()
+        sampler = AllCombinationSampler()
         pairs = [(p.a, p.b) for p in sampler.sample_pair_batch(cells)]
         self.assertEqual(pairs, [("a", "b"), ("a", "c"), ("a", "d"), ("b", "c"), ("b", "d"), ("c", "d")])
         self.assertEqual(sampler.sample_pair_batch(cells, 6), sampler.sample_pair_batch(cells))
@@ -165,13 +165,13 @@ class PositionTests(unittest.TestCase):
 
     def test_samplers_keep_their_own_instance(self):
         PositionSampler.reset()
-        AllPermutationSampler.reset()
+        AllCombinationSampler.reset()
         self.addCleanup(PositionSampler.reset)
-        self.addCleanup(AllPermutationSampler.reset)
+        self.addCleanup(AllCombinationSampler.reset)
         base = PositionSampler()
-        self.assertIsInstance(AllPermutationSampler(), AllPermutationSampler)
+        self.assertIsInstance(AllCombinationSampler(), AllCombinationSampler)
         self.assertIs(PositionSampler(), base)
-        self.assertIs(AllPermutationSampler(), AllPermutationSampler())
+        self.assertIs(AllCombinationSampler(), AllCombinationSampler())
 
 
 class GeneratorTests(unittest.TestCase):

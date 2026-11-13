@@ -7,9 +7,9 @@ from .Board import Board
 from .Chip import Chip
 from .ChipSection import ChipSection
 from .DesignSnapshot import DesignSnapshot
-from .Positions import (NumericallyPlaced, NumericalPositionFixed, Position, PositionPair, PositionSampler,
+from .Positions import (AllCombinationSampler, NumericallyPlaced, NumericalPositionFixed, Position, PositionPair, PositionSampler,
                         TerminalPositionPair)
 from .Terminal import Terminal
 
-__all__ = ["Board", "Chip", "ChipSection", "DesignSnapshot", "NumericallyPlaced", "NumericalPositionFixed", "Position",
+__all__ = ["AllCombinationSampler", "Board", "Chip", "ChipSection", "DesignSnapshot", "NumericallyPlaced", "NumericalPositionFixed", "Position",
            "PositionPair", "PositionSampler", "Terminal", "TerminalPositionPair"]

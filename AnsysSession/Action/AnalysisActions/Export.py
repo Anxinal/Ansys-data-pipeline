@@ -17,33 +17,7 @@ from configs import BZ_EXPRESSION, DEFAULT_GRID_STEP, DEFAULT_OUTPUT_DIR, DEFAUL
 
 from ...utils import file_stem
 from ..Action import AnsysAction
-
-
-def load_bz_image(fld_path):
-    """Read an AEDT grid export of a scalar into (x [nx], y [ny], bz [ny, nx]).
-
-    Rows are matched to pixels by their coordinates, so their order doesn't
-    matter. Pixels AEDT leaves out stay NaN.
-    """
-    rows = []
-    with open(fld_path, encoding="utf-8", errors="replace") as stream:
-        for line in stream:
-            parts = line.replace(",", " ").replace("D", "E").split()
-            if len(parts) != 4:
-                continue  # header lines
-            try:
-                rows.append([float(part) for part in parts])
-            except ValueError:
-                continue  # column-name line
-    if not rows:
-        raise ValueError(f"No x, y, z, value rows in {fld_path}")
-    data = np.array(rows)
-    x_coords = np.round(data[:, 0], 9)
-    y_coords = np.round(data[:, 1], 9)
-    x, y = np.unique(x_coords), np.unique(y_coords)
-    bz = np.full((len(y), len(x)), np.nan)
-    bz[np.searchsorted(y, y_coords), np.searchsorted(x, x_coords)] = data[:, 3]
-    return x, y, bz
+from .ScalarImage import load_scalar_image as load_bz_image
 
 
 class BzExport(AnsysAction):

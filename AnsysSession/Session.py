@@ -36,6 +36,15 @@ class Session:
         self._editor = ModelEditor(self._app)
         self._snapshot = None
 
+    @classmethod
+    def from_app(cls, path, app):
+        """Wrap an already connected AEDT app without launching another desktop."""
+        session = cls.__new__(cls)
+        session.path, session._app = str(path), app
+        session._reader, session._editor = DesignReader(app), ModelEditor(app)
+        session._snapshot = None
+        return session
+
     @property
     def design(self):
         return self._app.design_name
@@ -112,14 +121,18 @@ class Session:
         self.refresh()
         return result
 
-    def deselect_all_for_analysis(self, selected, state_file):
-        """Make every object inactive (out of the model), the background too.
+    def deselect_all_for_analysis(self, selected, state_file, preserve=()):
+        """Disable objects except ``preserve`` and its background, recording their original state.
 
         The original state, with ``selected`` recorded in it, is written to
         ``state_file`` first and returned, for the RestoreState action to undo this.
+        Without ``preserve``, every object including the background is disabled.
         """
         state, modeled, _ = capture(self, selected, state_file)
-        self._editor.set_model_state(sorted(modeled), False)
+        keep = set(preserve)
+        if keep:
+            keep.update(state["background"])
+        self._editor.set_model_state(sorted(modeled - keep), False)
         self.refresh()
         return state
 
@@ -222,6 +235,9 @@ class Session:
 
     def ensure_bz_expression(self):
         self._editor.ensure_bz_expression()
+
+    def ensure_j_expression(self):
+        self._editor.ensure_j_expression()
 
     def solve(self, setup, cores=None):
         return self._editor.solve(setup, cores)
